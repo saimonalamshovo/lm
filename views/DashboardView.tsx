@@ -173,7 +173,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
          <InsightCard label="Monthly Profit" value={`৳${formatNum(stats.netProfit)}`} icon={BarChart4} color="orange" theme={theme} desc="Final after ads & ops" />
       </section>
 
-      {/* MONTHLY DAILY SUMMARY LEDGER (EXPANDED TO 9 COLUMNS) */}
+      {/* MONTHLY DAILY SUMMARY LEDGER */}
       <section className={`${cardBg} border-2 border-slate-800/10 rounded-[2.5rem] p-10 shadow-2xl overflow-hidden`}>
          <div className="flex items-center justify-between mb-8 pb-6 border-b border-slate-800/20">
             <div>
@@ -181,11 +181,11 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
                   <CalendarDays className="w-6 h-6 text-red-600" />
                   Monthly Operations Ledger
                </h3>
-               <p className="text-[10px] font-bold text-slate-500 mt-1 uppercase tracking-widest">Audited 9-Point Performance Matrix</p>
+               <p className="text-[10px] font-bold text-slate-500 mt-1 uppercase tracking-widest">Granular 9-Column Financial Matrix</p>
             </div>
             <div className="px-4 py-2 bg-slate-800/50 rounded-2xl border border-slate-700/50 flex items-center gap-3">
                <ShieldCheck className="w-4 h-4 text-green-500" />
-               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Financial Integrity Verified</span>
+               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Audited Sync</span>
             </div>
          </div>
 
@@ -193,43 +193,40 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
             <table className="w-full text-left border-collapse min-w-[1200px]">
                <thead>
                   <tr className={theme === 'dark' ? 'bg-slate-950/80' : 'bg-gray-100'}>
-                     <th className="px-6 py-5 text-[9px] font-black text-slate-500 uppercase tracking-widest sticky left-0 z-20 bg-inherit shadow-md">Mission Date</th>
-                     <th className="px-6 py-5 text-[9px] font-black text-slate-500 uppercase tracking-widest text-right">Total Expenses (৳)</th>
-                     <th className="px-6 py-5 text-[9px] font-black text-blue-500 uppercase tracking-widest text-right bg-blue-500/5 border-x border-blue-500/10">Ads (Call Center)</th>
+                     <th className="px-6 py-5 text-[9px] font-black text-slate-500 uppercase tracking-widest sticky left-0 z-20 bg-inherit shadow-md">Date</th>
+                     <th className="px-6 py-5 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Expenses (Total)</th>
+                     <th className="px-6 py-5 text-[9px] font-black text-blue-500 uppercase tracking-widest text-right bg-blue-500/5 border-l border-blue-500/10">Ads (Call Center)</th>
                      <th className="px-6 py-5 text-[9px] font-black text-blue-500 uppercase tracking-widest text-right bg-blue-500/5 border-r border-blue-500/10">Rev (Call Center)</th>
-                     <th className="px-6 py-5 text-[9px] font-black text-orange-500 uppercase tracking-widest text-right bg-orange-500/5 border-x border-orange-500/10">Ads (Website)</th>
-                     <th className="px-6 py-5 text-[9px] font-black text-orange-500 uppercase tracking-widest text-right bg-orange-500/5 border-r border-orange-500/10">Rev (Website)</th>
-                     <th className="px-6 py-5 text-[9px] font-black text-red-500 uppercase tracking-widest text-right">Total Ad Burn (৳)</th>
-                     <th className="px-6 py-5 text-[9px] font-black text-green-500 uppercase tracking-widest text-right">Total Revenue (৳)</th>
-                     <th className="px-6 py-5 text-[9px] font-black text-white uppercase tracking-widest text-right bg-slate-800 shadow-inner">Net Profit (৳)</th>
+                     <th className="px-6 py-5 text-[9px] font-black text-orange-500 uppercase tracking-widest text-right bg-orange-500/5 border-l border-orange-500/10">Ads (Web)</th>
+                     <th className="px-6 py-5 text-[9px] font-black text-orange-500 uppercase tracking-widest text-right bg-orange-500/5 border-r border-orange-500/10">Rev (Web)</th>
+                     <th className="px-6 py-5 text-[9px] font-black text-red-500 uppercase tracking-widest text-right">Total Ad Burn</th>
+                     <th className="px-6 py-5 text-[9px] font-black text-green-500 uppercase tracking-widest text-right">Total Revenue</th>
+                     <th className="px-6 py-5 text-[9px] font-black text-white uppercase tracking-widest text-right bg-slate-800 shadow-inner">Net Profit</th>
                   </tr>
                </thead>
                <tbody className={`divide-y ${theme === 'dark' ? 'divide-slate-800/50' : 'divide-gray-100'}`}>
                   {stats.dailyBreakdown.length === 0 ? (
                      <tr><td colSpan={9} className="px-8 py-24 text-center opacity-30 font-black uppercase text-xs">No activity logged for this cycle</td></tr>
                   ) : stats.dailyBreakdown.map((day: any) => {
-                     const isLoss = day.profit < 0;
+                     const isLoss = day.netProfit < 0;
                      return (
                         <tr key={day.date} className="hover:bg-red-500/5 transition-colors group">
                            <td className="px-6 py-5 sticky left-0 z-10 bg-inherit border-r border-slate-800/10">
                               <p className={`text-xs font-black ${textColor}`}>{new Date(day.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</p>
-                              <p className="text-[8px] text-slate-500 font-bold uppercase mt-1">Shift {day.day}</p>
                            </td>
-                           <td className="px-6 py-5 text-right font-bold text-xs text-slate-400">৳{formatNum(day.totalExp)}</td>
+                           <td className="px-6 py-5 text-right font-bold text-xs text-slate-500 italic">৳{formatNum(day.expenses)}</td>
                            
-                           {/* Call Center Block */}
-                           <td className="px-6 py-5 text-right font-black text-xs text-blue-400 bg-blue-500/5 border-x border-slate-800/10 italic">৳{formatNum(day.adsCall)}</td>
+                           <td className="px-6 py-5 text-right font-black text-xs text-blue-400 bg-blue-500/5 border-l border-slate-800/10">৳{formatNum(day.adsCall)}</td>
                            <td className="px-6 py-5 text-right font-black text-xs text-blue-500 bg-blue-500/5 border-r border-slate-800/10">৳{formatNum(day.revCall)}</td>
                            
-                           {/* Website Block */}
-                           <td className="px-6 py-5 text-right font-black text-xs text-orange-400 bg-orange-500/5 border-x border-slate-800/10 italic">৳{formatNum(day.adsWeb)}</td>
+                           <td className="px-6 py-5 text-right font-black text-xs text-orange-400 bg-orange-500/5 border-l border-slate-800/10">৳{formatNum(day.adsWeb)}</td>
                            <td className="px-6 py-5 text-right font-black text-xs text-orange-500 bg-orange-500/5 border-r border-slate-800/10">৳{formatNum(day.revWeb)}</td>
                            
                            <td className="px-6 py-5 text-right font-black text-xs text-red-500 tabular-nums">৳{formatNum(day.totalAds)}</td>
                            <td className="px-6 py-5 text-right font-black text-xs text-green-500 tabular-nums">৳{formatNum(day.totalRev)}</td>
                            
                            <td className={`px-6 py-5 text-right font-black text-sm tabular-nums shadow-inner ${isLoss ? 'bg-red-900/10 text-red-500' : 'bg-green-900/10 text-green-500'}`}>
-                              {day.profit < 0 ? '-' : ''}৳{formatNum(Math.abs(day.profit))}
+                              {day.netProfit < 0 ? '-' : ''}৳{formatNum(Math.abs(day.netProfit))}
                            </td>
                         </tr>
                      );
