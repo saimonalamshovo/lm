@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { UserPlus, Plus, TrendingUp, DollarSign, Trash2, Edit3, Save, X, BarChart3, Globe, PhoneCall, Calendar, Search, ArrowRightCircle } from 'lucide-react';
+import { UserPlus, Plus, TrendingUp, DollarSign, Trash2, Edit3, Save, X, BarChart3, Globe, PhoneCall, Calendar, Search, ArrowRightCircle, ShieldAlert, Users } from 'lucide-react';
 import { Lead, Sale, Agent } from '../types';
 
 interface SalesViewProps {
@@ -17,7 +17,11 @@ const SalesView: React.FC<SalesViewProps> = ({ leads, setLeads, sales, setSales,
   const [showAgentModal, setShowAgentModal] = useState(false);
   const [showBulkSale, setShowBulkSale] = useState(false);
   const [showSaleModal, setShowSaleModal] = useState(false);
+  const [showDeleteAgentModal, setShowDeleteAgentModal] = useState(false);
+  
   const [editId, setEditId] = useState<string | null>(null);
+  const [agentEditId, setAgentEditId] = useState<string | null>(null);
+  const [agentToDelete, setAgentToDelete] = useState<Agent | null>(null);
   
   const [newAgent, setNewAgent] = useState({ name: '', avatar: '👨‍💼', color: '#ef4444' });
   const [bulkInputs, setBulkInputs] = useState<Record<string, { amount: string, adCost: string }>>({});
@@ -64,8 +68,47 @@ const SalesView: React.FC<SalesViewProps> = ({ leads, setLeads, sales, setSales,
     }
   };
 
+  const handleSaveAgent = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAgent.name.trim()) return;
+
+    if (agentEditId) {
+      setAgents(prev => prev.map(a => a.id === agentEditId ? { ...a, ...newAgent } : a));
+    } else {
+      const agent: Agent = {
+        id: newAgent.name.toLowerCase().replace(/\s/g, '_') + '_' + Date.now(),
+        name: newAgent.name,
+        avatar: newAgent.avatar,
+        color: newAgent.color
+      };
+      setAgents(prev => [...prev, agent]);
+    }
+
+    setNewAgent({ name: '', avatar: '👨‍💼', color: '#ef4444' });
+    setAgentEditId(null);
+    setShowAgentModal(false);
+  };
+
+  const openAgentEdit = (agent: Agent) => {
+    setAgentEditId(agent.id);
+    setNewAgent({ name: agent.name, avatar: agent.avatar, color: agent.color });
+    setShowAgentModal(true);
+  };
+
+  const confirmDeleteAgent = () => {
+    if (!agentToDelete) return;
+    setAgents(prev => prev.filter(a => a.id !== agentToDelete.id));
+    // Optionally remove or unassign sales from this agent
+    // setSales(sales.map(s => s.agentId === agentToDelete.id ? { ...s, agentId: undefined } : s));
+    setShowDeleteAgentModal(false);
+    setAgentToDelete(null);
+  };
+
   const deleteSale = (id: string) => {
-    if (confirm('Delete this financial entry?')) {
+    // Note: In App.tsx we refactored to custom modals, but for quick deletion here 
+    // we use a simple check or can implement a local modal if desired. 
+    // Sticking to consistency with standard custom modals for major actions.
+    if (window.confirm('Delete this financial entry?')) {
       setSales(sales.filter(s => s.id !== id));
     }
   };
@@ -128,7 +171,7 @@ const SalesView: React.FC<SalesViewProps> = ({ leads, setLeads, sales, setSales,
           <p className="text-xs text-slate-500 font-bold uppercase tracking-[0.2em] mt-1">Operational Flow Management</p>
         </div>
         <div className="flex flex-wrap gap-4">
-           <button onClick={() => setShowAgentModal(true)} className="flex items-center gap-3 bg-blue-600 px-6 py-4 rounded-2xl font-bold text-white shadow-xl transition-transform hover:scale-[1.02] text-xs uppercase tracking-widest">
+           <button onClick={() => { setAgentEditId(null); setNewAgent({ name: '', avatar: '👨‍💼', color: '#ef4444' }); setShowAgentModal(true); }} className="flex items-center gap-3 bg-blue-600 px-6 py-4 rounded-2xl font-bold text-white shadow-xl transition-transform hover:scale-[1.02] text-xs uppercase tracking-widest">
              <UserPlus className="w-5 h-5" /> Recruit Agent
            </button>
            <button onClick={() => { setEditId(null); setShowSaleModal(true); }} className="flex items-center gap-3 bg-orange-600 px-6 py-4 rounded-2xl font-bold text-white shadow-xl transition-transform hover:scale-[1.02] text-xs uppercase tracking-widest">
@@ -139,6 +182,35 @@ const SalesView: React.FC<SalesViewProps> = ({ leads, setLeads, sales, setSales,
            </button>
         </div>
       </div>
+
+      {/* AGENT ROSTER MANAGEMENT */}
+      <section className={`${cardBg} border-2 border-slate-800/10 rounded-[2rem] p-8 shadow-2xl`}>
+         <div className="flex items-center justify-between mb-8">
+            <h3 className={`text-xl font-bold ${textColor} flex items-center gap-3 uppercase tracking-tight`}>
+               <Users className="w-6 h-6 text-blue-500" />
+               Sales Force Roster
+            </h3>
+         </div>
+         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-6">
+            {agents.map(agent => (
+               <div key={agent.id} className={`p-6 rounded-[2rem] ${theme === 'dark' ? 'bg-slate-950/50' : 'bg-gray-50'} border border-slate-800/20 group hover:border-blue-500/30 transition-all relative overflow-hidden`}>
+                  <div className="flex flex-col items-center gap-4">
+                     <div className="w-20 h-20 rounded-3xl flex items-center justify-center text-4xl shadow-lg border-2 border-slate-800/20 transition-transform group-hover:scale-110" style={{ backgroundColor: `${agent.color}15`, borderColor: agent.color }}>
+                        {agent.avatar}
+                     </div>
+                     <div className="text-center">
+                        <p className={`text-sm font-black uppercase italic ${textColor}`}>{agent.name}</p>
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Specialist</p>
+                     </div>
+                  </div>
+                  <div className="flex justify-center gap-2 mt-6">
+                     <button onClick={() => openAgentEdit(agent)} className="p-2 text-slate-500 hover:text-blue-500 bg-slate-800/30 rounded-xl transition-all"><Edit3 className="w-4 h-4" /></button>
+                     <button onClick={() => { setAgentToDelete(agent); setShowDeleteAgentModal(true); }} className="p-2 text-slate-500 hover:text-red-500 bg-slate-800/30 rounded-xl transition-all"><Trash2 className="w-4 h-4" /></button>
+                  </div>
+               </div>
+            ))}
+         </div>
+      </section>
 
       {/* REVENUE LEDGER TABLE */}
       <section className={`${cardBg} border-2 border-slate-800/10 rounded-[2rem] shadow-2xl overflow-hidden`}>
@@ -161,7 +233,7 @@ const SalesView: React.FC<SalesViewProps> = ({ leads, setLeads, sales, setSales,
          <div className="overflow-x-auto">
             <table className="w-full text-left">
                <thead>
-                  <tr className={theme === 'dark' ? 'bg-slate-950/50' : 'bg-gray-50'}>
+                  <tr className={theme === 'dark' ? 'bg-slate-950/50' : 'bg-gray-100'}>
                      <th className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Date</th>
                      <th className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Channel</th>
                      <th className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Agent</th>
@@ -211,6 +283,65 @@ const SalesView: React.FC<SalesViewProps> = ({ leads, setLeads, sales, setSales,
             </table>
          </div>
       </section>
+
+      {/* MODAL: RECRUIT / EDIT AGENT */}
+      {showAgentModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-md">
+           <div className={`${cardBg} border-2 border-slate-800 rounded-[2.5rem] p-10 w-full max-w-md shadow-2xl animate-in zoom-in-95`}>
+              <div className="flex justify-between items-center mb-8">
+                 <h3 className={`text-2xl font-bold ${textColor} uppercase tracking-tight`}>{agentEditId ? 'Modify Agent' : 'Recruit New Agent'}</h3>
+                 <button onClick={() => { setShowAgentModal(false); setAgentEditId(null); }} className="text-slate-500 hover:text-red-500"><X className="w-7 h-7" /></button>
+              </div>
+              <form onSubmit={handleSaveAgent} className="space-y-6">
+                 <div className="space-y-1">
+                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Agent Full Name</label>
+                   <input 
+                    placeholder="e.g. Afrin Sultana" 
+                    className={`w-full ${inputBg} border-none rounded-2xl px-6 py-4 ${textColor} outline-none focus:ring-2 focus:ring-blue-600 font-bold`}
+                    value={newAgent.name} onChange={e => setNewAgent({...newAgent, name: e.target.value})}
+                    required
+                    autoFocus
+                   />
+                 </div>
+                 <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Avatar / Emoji</label>
+                      <input 
+                        className={`w-full ${inputBg} border-none rounded-2xl px-6 py-4 ${textColor} outline-none font-bold text-center`}
+                        value={newAgent.avatar} onChange={e => setNewAgent({...newAgent, avatar: e.target.value})}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Identity Color</label>
+                      <input 
+                        type="color"
+                        className={`w-full h-[58px] ${inputBg} border-none rounded-2xl p-1 outline-none cursor-pointer`}
+                        value={newAgent.color} onChange={e => setNewAgent({...newAgent, color: e.target.value})}
+                      />
+                    </div>
+                 </div>
+                 <button type="submit" className="w-full py-5 bg-blue-600 text-white font-black rounded-2xl shadow-xl shadow-blue-900/40 uppercase tracking-widest italic mt-4">
+                    {agentEditId ? 'Commit Update' : 'Authorize Recruitment'}
+                 </button>
+              </form>
+           </div>
+        </div>
+      )}
+
+      {/* MODAL: DELETE AGENT CONFIRMATION */}
+      {showDeleteAgentModal && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-md">
+           <div className={`${cardBg} border-2 border-red-500/30 rounded-[2.5rem] p-10 w-full max-w-md shadow-2xl animate-in zoom-in-95`}>
+              <div className="flex justify-center mb-6"><div className="w-16 h-16 rounded-full bg-red-600/10 flex items-center justify-center"><ShieldAlert className="w-8 h-8 text-red-600" /></div></div>
+              <h3 className={`text-xl font-black ${textColor} text-center uppercase tracking-tight`}>Terminate Agent Service?</h3>
+              <p className="text-slate-500 text-center text-sm mt-4 leading-relaxed font-medium">Are you sure you want to remove "<span className="text-red-500 font-bold">{agentToDelete?.name}</span>" from the active roster? Past sales records will be preserved but show as 'Agent Removed'.</p>
+              <div className="flex flex-col gap-3 mt-8">
+                 <button onClick={confirmDeleteAgent} className="w-full py-4 bg-red-600 text-white font-black rounded-2xl uppercase text-xs tracking-widest shadow-xl shadow-red-900/30">Terminate Record</button>
+                 <button onClick={() => { setShowDeleteAgentModal(false); setAgentToDelete(null); }} className="w-full py-4 text-slate-500 font-bold uppercase text-[10px] tracking-widest">Keep Agent</button>
+              </div>
+           </div>
+        </div>
+      )}
 
       {/* Sale Modal (Individual) */}
       {showSaleModal && (
@@ -299,7 +430,7 @@ const SalesView: React.FC<SalesViewProps> = ({ leads, setLeads, sales, setSales,
                     <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2">Shift Date (Dhaka Time)</p>
                     <input type="date" className="bg-slate-950 text-white font-bold text-xl rounded-xl px-4 py-2 border border-slate-700 outline-none" value={bulkDate} onChange={e => setBulkDate(e.target.value)} />
                  </div>
-                 <Calendar className="w-10 h-10 text-slate-700" />
+                 <PhoneCall className="w-10 h-10 text-slate-700" />
               </div>
 
               <div className="space-y-4 mb-10">

@@ -7,24 +7,19 @@ interface VersionsViewProps {
   versions: Version[];
   setVersions: React.Dispatch<React.SetStateAction<Version[]>>;
   onRestore: (version: Version) => void;
+  onDelete: (version: Version) => void;
   theme: 'dark' | 'light';
 }
 
-const VersionsView: React.FC<VersionsViewProps> = ({ versions, setVersions, onRestore, theme }) => {
+const VersionsView: React.FC<VersionsViewProps> = ({ versions, setVersions, onRestore, onDelete, theme }) => {
   const cardBg = theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-200 shadow-sm';
   const textColor = theme === 'dark' ? 'text-white' : 'text-gray-900';
-
-  const deleteVersion = (id: string) => {
-    if (confirm('Delete this historical record permanently?')) {
-      setVersions(prev => prev.filter(v => v.id !== id));
-    }
-  };
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-10">
       <div>
-        <h2 className={`text-4xl font-black ${textColor} italic uppercase tracking-tighter`}>Saved Progress</h2>
-        <p className="text-sm text-slate-500 font-bold uppercase tracking-widest mt-2">Manage and restore old dashboard states</p>
+        <h2 className={`text-4xl font-black ${textColor} italic uppercase tracking-tighter`}>History Registry</h2>
+        <p className="text-sm text-slate-500 font-bold uppercase tracking-widest mt-2">Manage and Restore Historical Database States</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -32,7 +27,7 @@ const VersionsView: React.FC<VersionsViewProps> = ({ versions, setVersions, onRe
           <div className="lg:col-span-3 text-center py-40 bg-slate-900/10 border-2 border-dashed border-slate-800 rounded-[3rem] opacity-30">
              <History className="w-20 h-20 mx-auto mb-6 text-slate-500" />
              <p className="text-xl font-black uppercase italic tracking-[0.2em]">No history records found</p>
-             <p className="text-xs font-bold uppercase mt-2">Use "Save & Start New" to create your first record</p>
+             <p className="text-xs font-bold uppercase mt-2">Use "Create Backup" from the sidebar to save progress</p>
           </div>
         ) : (
           versions.map((version) => (
@@ -43,7 +38,7 @@ const VersionsView: React.FC<VersionsViewProps> = ({ versions, setVersions, onRe
                   </div>
                   <div className="flex gap-2">
                      <button onClick={() => onRestore(version)} className="p-3 bg-green-500/10 text-green-500 hover:bg-green-500 hover:text-white rounded-2xl transition-all shadow-sm" title="Restore Data"><RotateCcw className="w-5 h-5" /></button>
-                     <button onClick={() => deleteVersion(version.id)} className="p-3 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-2xl transition-all shadow-sm" title="Delete Record"><Trash2 className="w-5 h-5" /></button>
+                     <button onClick={() => onDelete(version)} className="p-3 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-2xl transition-all shadow-sm" title="Delete Record"><Trash2 className="w-5 h-5" /></button>
                   </div>
                </div>
                
@@ -54,17 +49,17 @@ const VersionsView: React.FC<VersionsViewProps> = ({ versions, setVersions, onRe
                </div>
 
                <div className="grid grid-cols-2 gap-4">
-                  <StatSnippet label="Transactions" value={version.data.sales?.length || 0} theme={theme} />
-                  <StatSnippet label="Goal Amount" value={`৳${((version.data.monthlyTarget || 0) / 1000).toFixed(0)}k`} theme={theme} />
-                  <StatSnippet label="Mission Count" value={version.data.tasks?.length || 0} theme={theme} />
-                  <StatSnippet label="Staff Size" value={version.data.teamMembers?.length || 0} theme={theme} />
+                  <StatSnippet label="Sales Entry" value={version.data.sales?.length || 0} theme={theme} />
+                  <StatSnippet label="Goal Target" value={`৳${((version.data.monthlyTarget || 0) / 1000).toFixed(0)}k`} theme={theme} />
+                  <StatSnippet label="Missions" value={version.data.tasks?.length || 0} theme={theme} />
+                  <StatSnippet label="Operators" value={version.data.teamMembers?.length || 0} theme={theme} />
                </div>
                
                <button 
                 onClick={() => onRestore(version)}
                 className="w-full mt-10 py-4 bg-slate-800/50 hover:bg-blue-600 text-slate-400 hover:text-white font-black rounded-2xl transition-all flex items-center justify-center gap-2 uppercase text-[10px] tracking-[0.2em]"
                >
-                 GO TO THIS VERSION <ArrowRight className="w-4 h-4" />
+                 RESTORE SYSTEM STATE <ArrowRight className="w-4 h-4" />
                </button>
             </div>
           ))

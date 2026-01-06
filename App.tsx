@@ -16,8 +16,16 @@ import {
   Loader2,
   CloudUpload,
   RefreshCw,
-  AlertCircle
+  AlertCircle,
+  Download,
+  RotateCcw,
+  Save,
+  X,
+  AlertTriangle,
+  ArrowRight,
+  Trash2
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { supabase } from './supabaseClient';
 import { Task, Lead, Sale, Expense, ContentItem, Agent, TeamMember, Version } from './types';
 import { INITIAL_TEAM, INITIAL_AGENTS, DEFAULT_MONTHLY_TARGET } from './constants';
@@ -48,6 +56,16 @@ const App: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+
+  // Modals for Actions
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [showBackupModal, setShowBackupModal] = useState(false);
+  const [showRestoreModal, setShowRestoreModal] = useState(false);
+  const [showDeleteVersionModal, setShowDeleteVersionModal] = useState(false);
+  
+  const [backupName, setBackupName] = useState('');
+  const [versionToRestore, setVersionToRestore] = useState<Version | null>(null);
+  const [versionToDelete, setVersionToDelete] = useState<Version | null>(null);
 
   const [monthlyTarget, setMonthlyTarget] = useState<number>(DEFAULT_MONTHLY_TARGET);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -91,7 +109,7 @@ const App: React.FC = () => {
       if (cfg && cfg.value !== undefined) setMonthlyTarget(cfg.value);
 
       const savedTheme = localStorage.getItem('lm_theme') as 'dark' | 'light';
-      if (savedTheme) setTheme(savedTheme);
+      if (savedTheme) setTheme(savedTheme || 'dark');
       setLastSyncTime(new Date().toLocaleTimeString());
     } catch (err) {
       console.error("Cloud fetch error:", err);
@@ -148,6 +166,118 @@ const App: React.FC = () => {
   useEffect(() => { persist('versions', versions); }, [versions]);
   useEffect(() => { persist('app_config', monthlyTarget as any, true); }, [monthlyTarget]);
 
+  const confirmReset = () => {
+    setSales([]);
+    setExpenses([]);
+    setTasks([]);
+    setLeads([]);
+    setContent([]);
+    setAgents(INITIAL_AGENTS);
+    setTeamMembers(INITIAL_TEAM);
+    setMonthlyTarget(DEFAULT_MONTHLY_TARGET);
+    setShowResetModal(false);
+    alert("System Cleared Successfully.");
+  };
+
+  const confirmBackup = () => {
+    if (!backupName.trim()) return;
+    const newVersion: Version = {
+      id: Math.random().toString(36).substr(2, 9),
+      name: backupName,
+      timestamp: new Date().toISOString(),
+      data: {
+        tasks: JSON.parse(JSON.stringify(tasks)),
+        leads: JSON.parse(JSON.stringify(leads)),
+        sales: JSON.parse(JSON.stringify(sales)),
+        expenses: JSON.parse(JSON.stringify(expenses)),
+        content: JSON.parse(JSON.stringify(content)),
+        agents: JSON.parse(JSON.stringify(agents)),
+        teamMembers: JSON.parse(JSON.stringify(teamMembers)),
+        monthlyTarget
+      }
+    };
+    setVersions(prev => [newVersion, ...prev]);
+    setBackupName('');
+    setShowBackupModal(false);
+    alert("Backup Point Created.");
+  };
+
+  const confirmRestore = () => {
+    if (!versionToRestore) return;
+    const v = versionToRestore;
+    setTasks(JSON.parse(JSON.stringify(v.data.tasks || [])));
+    setLeads(JSON.parse(JSON.stringify(v.data.leads || [])));
+    setSales(JSON.parse(JSON.stringify(v.data.sales || [])));
+    setExpenses(JSON.parse(JSON.stringify(v.data.expenses || [])));
+    setContent(JSON.parse(JSON.stringify(v.data.content || [])));
+    setAgents(JSON.parse(JSON.stringify(v.data.agents || INITIAL_AGENTS)));
+    setTeamMembers(JSON.parse(JSON.stringify(v.data.teamMembers || INITIAL_TEAM)));
+    setMonthlyTarget(v.data.monthlyTarget || DEFAULT_MONTHLY_TARGET);
+    
+    setShowRestoreModal(false);
+    setVersionToRestore(null);
+    setActiveTab('dashboard');
+    alert(`Restored to point: ${v.name}`);
+  };
+
+  const confirmDeleteVersion = () => {
+    if (!versionToDelete) return;
+    setVersions(prev => prev.filter(v => v.id !== versionToDelete.id));
+    setShowDeleteVersionModal(false);
+    setVersionToDelete(null);
+  };
+
+  const exportToExcel = (dailyBreakdown: any[]) => {
+    try {
+      const wb = XLSX.utils.book_new();
+      
+      // 1. Monthly Ledger (Summary)
+      const ledgerSheetData = (dailyBreakdown || []).map(d => ({
+        'Date': d.date,
+        'Operational Expenses': d.expenses,
+        'Ads Cost (Call)': d.adsCall,
+        'Revenue (Call)': d.revCall,
+        'Ads Cost (Web)': d.adsWeb,
+        'Revenue (Web)': d.revWeb,
+        'Total Ad Spend': d.totalAds,
+        'Total Gross Revenue': d.totalRev,
+        'Net Profit': d.netProfit
+      }));
+      const ws1 = XLSX.utils.json_to_sheet(ledgerSheetData);
+      XLSX.utils.book_append_sheet(wb, ws1, "Monthly Summary");
+
+      // 2. Full Sales Log
+      const salesSheetData = (sales || []).map(s => ({
+        'Date/Time': new Date(s.createdAt).toLocaleString(),
+        'Channel': s.type.toUpperCase(),
+        'Revenue Amount': s.amount,
+        'Associated Ad Cost': s.adCost,
+        'Assigned Agent': agents.find(a => a.id === s.agentId)?.name || 'Direct Order',
+        'Sales ID': s.id
+      }));
+      const ws2 = XLSX.utils.json_to_sheet(salesSheetData);
+      XLSX.utils.book_append_sheet(wb, ws2, "Full Sales Log");
+
+      // 3. Full Expenses Log
+      const expensesSheetData = (expenses || []).map(e => ({
+        'Date': e.date,
+        'Category': e.type.toUpperCase(),
+        'Amount': e.amount,
+        'Description/Justification': e.description || 'N/A',
+        'Logged At': new Date(e.createdAt).toLocaleString()
+      }));
+      const ws3 = XLSX.utils.json_to_sheet(expensesSheetData);
+      XLSX.utils.book_append_sheet(wb, ws3, "Expenses Registry");
+
+      // Save the file
+      const fileName = `Learningmate_Full_Ledger_${new Date().toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+    } catch (err) {
+      console.error("Export error:", err);
+      alert("System could not generate Excel file. Check browser permissions.");
+    }
+  };
+
   const stats = useMemo(() => {
     const dhakaNow = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Dhaka"}));
     const currentDay = dhakaNow.getDate();
@@ -180,28 +310,20 @@ const App: React.FC = () => {
     for (let i = 1; i <= lastDayOfMonth; i++) {
       const date = new Date(dhakaNow.getFullYear(), dhakaNow.getMonth(), i);
       const dateStr = date.toISOString().split('T')[0];
-      
       const daySales = (sales || []).filter(s => s.createdAt.startsWith(dateStr));
       const dayExpenses = (expenses || []).filter(e => e.date === dateStr);
-      
       const revCall = daySales.filter(s => s.type === 'call').reduce((acc, s) => acc + (s.amount || 0), 0);
       const adsCall = daySales.filter(s => s.type === 'call').reduce((acc, s) => acc + (s.adCost || 0), 0);
       const revWeb = daySales.filter(s => s.type === 'website').reduce((acc, s) => acc + (s.amount || 0), 0);
       const adsWeb = daySales.filter(s => s.type === 'website').reduce((acc, s) => acc + (s.adCost || 0), 0);
-      
       const directAdCosts = dayExpenses.filter(e => e.type === 'adcost').reduce((acc, e) => acc + (e.amount || 0), 0);
       const operationalExp = dayExpenses.reduce((acc, e) => acc + (e.amount || 0), 0);
-      
       const dayTotalAds = adsCall + adsWeb + directAdCosts;
       const dayTotalRev = revCall + revWeb;
       const dayTotalExpAll = operationalExp + adsCall + adsWeb;
       const dayNetProfit = dayTotalRev - dayTotalExpAll;
-      
       if (dayTotalRev > 0 || dayTotalAds > 0 || dayTotalExpAll > 0) {
-        dailyBreakdown.push({
-          date: dateStr, day: i, expenses: dayTotalExpAll, adsCall, revCall,
-          adsWeb, revWeb, totalAds: dayTotalAds, totalRev: dayTotalRev, netProfit: dayNetProfit
-        });
+        dailyBreakdown.push({ date: dateStr, day: i, expenses: dayTotalExpAll, adsCall, revCall, adsWeb, revWeb, totalAds: dayTotalAds, totalRev: dayTotalRev, netProfit: dayNetProfit });
       }
     }
 
@@ -226,118 +348,140 @@ const App: React.FC = () => {
   if (isLoading) {
     return (
       <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-950 gap-6">
-        <div className="relative">
-          <Loader2 className="w-16 h-16 text-red-600 animate-spin" />
-          <CloudUpload className="w-6 h-6 text-white absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-        </div>
-        <div className="text-center space-y-2 px-10">
-          <h2 className="text-white font-black uppercase tracking-widest text-xl">Connecting to Cloud Matrix</h2>
-          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-tighter">Synchronizing global operations ledger...</p>
-        </div>
+        <Loader2 className="w-16 h-16 text-red-600 animate-spin" />
+        <h2 className="text-white font-black uppercase tracking-widest text-xl">Learningmate Pro</h2>
       </div>
     );
   }
 
+  const sidebarClass = theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-200';
+  const navBtnClass = (id: string) => `w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === id ? 'bg-red-600 text-white' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'}`;
+
   return (
-    <div className={`flex h-full overflow-hidden ${theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-gray-50 text-gray-900'} transition-colors duration-300 font-sans`}>
-      <aside className={`w-64 flex-shrink-0 ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-200'} border-r flex flex-col hidden lg:flex shadow-2xl z-40`}>
+    <div className={`flex h-full overflow-hidden ${theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-gray-50 text-gray-900'}`}>
+      <aside className={`w-64 flex-shrink-0 ${sidebarClass} border-r flex flex-col hidden lg:flex z-40`}>
         <div className="p-6">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-red-600 flex items-center justify-center shadow-lg">
-              <span className="text-white font-black text-xl italic">LM</span>
-            </div>
-            <div>
-              <h1 className="font-bold text-lg leading-none tracking-tight">Learningmate</h1>
-              <span className="text-[10px] text-red-500 font-bold uppercase tracking-wider">Cloud Operations</span>
-            </div>
+            <div className="w-10 h-10 rounded-xl bg-red-600 flex items-center justify-center shadow-lg"><span className="text-white font-black text-xl italic">LM</span></div>
+            <div><h1 className="font-bold text-lg leading-none">Management</h1></div>
           </div>
         </div>
-
         <nav className="flex-1 px-4 space-y-1">
           {navItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                activeTab === item.id 
-                ? 'bg-red-600/10 text-red-500' 
-                : `${theme === 'dark' ? 'text-slate-400 hover:bg-slate-800/50 hover:text-white' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`
-              }`}
-            >
+            <button key={item.id} onClick={() => setActiveTab(item.id)} className={navBtnClass(item.id)}>
               <item.icon className="w-5 h-5" />
               <span className="font-semibold text-sm">{item.label}</span>
             </button>
           ))}
         </nav>
-
-        <div className="p-4 mt-auto border-t border-slate-800/20 space-y-2">
-          <div className="px-4 py-2 flex flex-col gap-1">
-             <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Last Cloud Handshake</span>
-             <span className="text-[10px] font-bold text-slate-300">{lastSyncTime || 'Pending...'}</span>
-          </div>
-          <button 
-            onClick={fetchAllData}
-            className={`w-full flex items-center justify-center gap-2 py-3 ${theme === 'dark' ? 'bg-blue-600/10 text-blue-500 hover:bg-blue-600/20' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'} rounded-xl text-xs font-bold transition-all`}
-          >
-            <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-            Sync from Cloud
+        <div className="p-4 mt-auto border-t border-slate-800/20 space-y-2 bg-slate-900/30">
+          <button onClick={() => exportToExcel(stats.dailyBreakdown)} className="w-full flex items-center gap-3 px-4 py-2 text-xs font-bold text-blue-500 hover:bg-blue-500/10 rounded-lg transition-all">
+            <Download className="w-4 h-4" /> Export Ledger
+          </button>
+          <button onClick={() => { setBackupName(`Snapshot ${new Date().toLocaleDateString()}`); setShowBackupModal(true); }} className="w-full flex items-center gap-3 px-4 py-2 text-xs font-bold text-green-500 hover:bg-green-500/10 rounded-lg transition-all">
+            <Save className="w-4 h-4" /> Create Backup
+          </button>
+          <button onClick={() => setShowResetModal(true)} className="w-full flex items-center gap-3 px-4 py-2 text-xs font-bold text-red-500 hover:bg-red-500/10 rounded-lg transition-all">
+            <RotateCcw className="w-4 h-4" /> Reset All Data
           </button>
         </div>
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-        <header className={`h-16 flex-shrink-0 ${theme === 'dark' ? 'bg-slate-900/50 border-slate-800' : 'bg-white/80 border-gray-200'} backdrop-blur-md border-b px-8 flex items-center justify-between z-30 shadow-sm`}>
-          <div className="flex items-center gap-6">
-             <div className="flex flex-col">
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none">Dhaka, BD</span>
-                <span className={`text-sm font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>{stats.dhakaTime}</span>
-             </div>
-             <div className={`h-8 w-[1px] ${theme === 'dark' ? 'bg-slate-800' : 'bg-gray-200'}`} />
-             <div className="flex items-center gap-2">
-                {isSyncing ? (
-                  <div className="flex items-center gap-2 px-3 py-1 bg-blue-500/10 rounded-full border border-blue-500/20">
-                    <CloudUpload className="w-3 h-3 text-blue-500 animate-pulse" />
-                    <span className="text-[9px] font-black text-blue-500 uppercase">Saving to Cloud...</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 px-3 py-1 bg-green-500/10 rounded-full border border-green-500/20">
-                    <ShieldCheck className="w-3 h-3 text-green-500" />
-                    <span className="text-[9px] font-black text-green-500 uppercase">Connected</span>
-                  </div>
-                )}
-             </div>
+        <header className={`h-16 flex-shrink-0 ${theme === 'dark' ? 'bg-slate-900/50 border-slate-800' : 'bg-white/80 border-gray-200'} backdrop-blur-md border-b px-8 flex items-center justify-between z-30`}>
+          <div className="flex items-center gap-4">
+             <span className="text-xs font-bold uppercase text-slate-500">{stats.dhakaDate} | {stats.dhakaTime}</span>
+             {isSyncing && <RefreshCw className="w-4 h-4 text-blue-500 animate-spin" />}
           </div>
-          <button onClick={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')} className={`p-2 rounded-full transition-all ${theme === 'dark' ? 'bg-slate-800 text-yellow-400 hover:bg-slate-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+          <button onClick={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')} className="p-2 rounded-full bg-slate-800 text-yellow-500 shadow-lg">
             {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </button>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-8 scroll-smooth">
-          {activeTab === 'dashboard' && <DashboardView stats={stats} monthlyTarget={monthlyTarget} onTargetChange={setMonthlyTarget} theme={theme} setSales={setSales} sales={sales} />}
+        <div className="flex-1 overflow-y-auto p-8">
+          {activeTab === 'dashboard' && <DashboardView stats={stats} monthlyTarget={monthlyTarget} onTargetChange={setMonthlyTarget} theme={theme} setSales={setSales} sales={sales} onReset={() => setShowResetModal(true)} onExport={() => exportToExcel(stats.dailyBreakdown)} onBackup={() => { setBackupName(`Snapshot ${new Date().toLocaleDateString()}`); setShowBackupModal(true); }} />}
           {activeTab === 'sales' && <SalesView leads={leads} setLeads={setLeads} sales={sales} setSales={setSales} agents={agents} setAgents={setAgents} theme={theme} />}
           {activeTab === 'expenses' && <ExpensesView expenses={expenses} setExpenses={setExpenses} agents={agents} theme={theme} />}
           {activeTab === 'calendar' && <CalendarView tasks={tasks} sales={sales} expenses={expenses} theme={theme} teamMembers={teamMembers} agents={agents} />}
           {activeTab === 'tasks' && <TasksView tasks={tasks} setTasks={setTasks} teamMembers={teamMembers} theme={theme} />}
           {activeTab === 'team' && <TeamView tasks={tasks} teamMembers={teamMembers} setTeamMembers={setTeamMembers} theme={theme} />}
           {activeTab === 'content' && <ContentView content={content} setContent={setContent} theme={theme} />}
-          {activeTab === 'versions' && <VersionsView versions={versions} setVersions={setVersions} onRestore={v => {
-            if(confirm(`Restore "${v.name}"?`)) {
-              setTasks(v.data.tasks); setLeads(v.data.leads); setSales(v.data.sales);
-              setExpenses(v.data.expenses); setContent(v.data.content); setAgents(v.data.agents);
-              setTeamMembers(v.data.teamMembers); setMonthlyTarget(v.data.monthlyTarget);
-              setActiveTab('dashboard');
-            }
-          }} theme={theme} />}
+          {activeTab === 'versions' && (
+            <VersionsView 
+              versions={versions} 
+              setVersions={setVersions} 
+              onRestore={v => { setVersionToRestore(v); setShowRestoreModal(true); }} 
+              onDelete={v => { setVersionToDelete(v); setShowDeleteVersionModal(true); }}
+              theme={theme} 
+            />
+          )}
         </div>
       </main>
 
-      {!isLoading && !initialLoadDone.current && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90">
-           <div className="bg-slate-900 border border-red-500/30 p-10 rounded-3xl max-w-sm text-center">
-              <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-              <h3 className="text-white font-bold text-xl uppercase mb-2">Sync Error</h3>
-              <p className="text-slate-400 text-sm mb-6">Unable to establish cloud connection. Check your internet or Supabase configuration.</p>
-              <button onClick={() => window.location.reload()} className="w-full py-4 bg-red-600 text-white font-black rounded-xl">RETRY CONNECTION</button>
+      {/* MODAL: RESET CONFIRMATION */}
+      {showResetModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl animate-in fade-in duration-200">
+           <div className={`w-full max-w-md ${theme === 'dark' ? 'bg-slate-900 border-red-500/30' : 'bg-white border-gray-200'} border-2 rounded-[2.5rem] p-10 shadow-2xl`}>
+              <div className="flex justify-center mb-6"><div className="w-16 h-16 rounded-full bg-red-600/10 flex items-center justify-center"><AlertTriangle className="w-8 h-8 text-red-600" /></div></div>
+              <h3 className={`text-xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-900'} text-center uppercase tracking-tight`}>Danger: System Wipe</h3>
+              <p className="text-slate-500 text-center text-sm mt-4 leading-relaxed font-medium">This will permanently delete all sales, leads, tasks, and operational history. Changes are irreversible.</p>
+              <div className="flex flex-col gap-3 mt-8">
+                 <button onClick={confirmReset} className="w-full py-4 bg-red-600 text-white font-black rounded-2xl uppercase text-xs tracking-widest shadow-xl shadow-red-900/30">Wipe Everything</button>
+                 <button onClick={() => setShowResetModal(false)} className="w-full py-4 text-slate-500 font-bold uppercase text-[10px] tracking-widest">Abort Mission</button>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {/* MODAL: DELETE VERSION CONFIRMATION */}
+      {showDeleteVersionModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl animate-in fade-in duration-200">
+           <div className={`w-full max-w-md ${theme === 'dark' ? 'bg-slate-900 border-red-500/30' : 'bg-white border-gray-200'} border-2 rounded-[2.5rem] p-10 shadow-2xl`}>
+              <div className="flex justify-center mb-6"><div className="w-16 h-16 rounded-full bg-red-600/10 flex items-center justify-center"><Trash2 className="w-8 h-8 text-red-600" /></div></div>
+              <h3 className={`text-xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-900'} text-center uppercase tracking-tight`}>Delete History Point?</h3>
+              <p className="text-slate-500 text-center text-sm mt-4 leading-relaxed font-medium">Are you sure you want to remove the snapshot "<span className="text-red-500 font-bold">{versionToDelete?.name}</span>"? This cannot be undone.</p>
+              <div className="flex flex-col gap-3 mt-8">
+                 <button onClick={confirmDeleteVersion} className="w-full py-4 bg-red-600 text-white font-black rounded-2xl uppercase text-xs tracking-widest shadow-xl shadow-red-900/30">Permanently Delete</button>
+                 <button onClick={() => { setShowDeleteVersionModal(false); setVersionToDelete(null); }} className="w-full py-4 text-slate-500 font-bold uppercase text-[10px] tracking-widest">Cancel</button>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {/* MODAL: RESTORE CONFIRMATION */}
+      {showRestoreModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl animate-in fade-in duration-200">
+           <div className={`w-full max-w-md ${theme === 'dark' ? 'bg-slate-900 border-blue-500/30' : 'bg-white border-gray-200'} border-2 rounded-[2.5rem] p-10 shadow-2xl`}>
+              <div className="flex justify-center mb-6"><div className="w-16 h-16 rounded-full bg-blue-600/10 flex items-center justify-center"><RotateCcw className="w-8 h-8 text-blue-600" /></div></div>
+              <h3 className={`text-xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-900'} text-center uppercase tracking-tight`}>Restore Progress?</h3>
+              <p className="text-slate-500 text-center text-sm mt-4 leading-relaxed font-medium">This will replace all current data with the state from "<span className="text-blue-500 font-bold">{versionToRestore?.name}</span>". Any unsaved current changes will be lost.</p>
+              <div className="flex flex-col gap-3 mt-8">
+                 <button onClick={confirmRestore} className="w-full py-4 bg-blue-600 text-white font-black rounded-2xl uppercase text-xs tracking-widest shadow-xl shadow-blue-900/30">Confirm Restore</button>
+                 <button onClick={() => { setShowRestoreModal(false); setVersionToRestore(null); }} className="w-full py-4 text-slate-500 font-bold uppercase text-[10px] tracking-widest">Cancel</button>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {/* MODAL: BACKUP PROMPT */}
+      {showBackupModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl animate-in fade-in duration-200">
+           <div className={`w-full max-w-md ${theme === 'dark' ? 'bg-slate-900 border-blue-500/30' : 'bg-white border-gray-200'} border-2 rounded-[2.5rem] p-10 shadow-2xl`}>
+              <div className="flex justify-between items-center mb-8">
+                <h3 className={`text-xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-900'} uppercase tracking-tight`}>Create Backup</h3>
+                <button onClick={() => setShowBackupModal(false)} className="text-slate-500"><X className="w-6 h-6" /></button>
+              </div>
+              <div className="space-y-4">
+                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2">Snapshot Label</label>
+                 <input 
+                   autoFocus
+                   className={`w-full ${theme === 'dark' ? 'bg-slate-950' : 'bg-gray-100'} border-2 border-slate-800 rounded-2xl px-6 py-4 ${theme === 'dark' ? 'text-white' : 'text-slate-900'} font-bold outline-none focus:ring-2 focus:ring-blue-600`}
+                   value={backupName}
+                   onChange={e => setBackupName(e.target.value)}
+                   onKeyDown={e => e.key === 'Enter' && confirmBackup()}
+                 />
+                 <button onClick={confirmBackup} className="w-full py-4 bg-blue-600 text-white font-black rounded-2xl uppercase text-xs tracking-widest shadow-xl shadow-blue-900/30 mt-4">Commit Snapshot</button>
+              </div>
            </div>
         </div>
       )}
