@@ -26,6 +26,25 @@ import {
 } from 'lucide-react';
 import { Sale } from '../types';
 
+const InsightCard: React.FC<{ label: string; value: string | number; icon: any; color: string; theme: 'dark' | 'light'; desc: string }> = ({ label, value, icon: Icon, color, theme, desc }) => {
+  const colors: any = {
+    green: 'text-green-500 bg-green-500/10 border-green-500/20 shadow-green-500/10',
+    blue: 'text-blue-500 bg-blue-500/10 border-blue-500/20 shadow-blue-500/10',
+    red: 'text-red-500 bg-red-500/10 border-red-500/20 shadow-red-500/10',
+    orange: 'text-orange-500 bg-orange-500/10 border-orange-500/20 shadow-orange-500/10',
+  };
+  return (
+    <div className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-200 shadow-sm'} border-2 p-8 rounded-[2rem] shadow-xl relative overflow-hidden group hover:scale-[1.02] transition-all`}>
+      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-6 border ${colors[color]} shadow-lg transition-transform`}>
+        <Icon className="w-7 h-7" />
+      </div>
+      <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">{label}</p>
+      <p className={`text-3xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-900'} mt-2 tracking-tight uppercase truncate`}>{value}</p>
+      <p className="text-[10px] font-medium text-slate-500 uppercase mt-4">{desc}</p>
+    </div>
+  );
+};
+
 interface DashboardViewProps {
   stats: any;
   monthlyTarget: number;
@@ -76,7 +95,6 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
 
   const cardBg = theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-200 shadow-sm';
   const textColor = theme === 'dark' ? 'text-white' : 'text-gray-900';
-  const labelColor = theme === 'dark' ? 'text-slate-500' : 'text-gray-400';
 
   return (
     <div className="space-y-10 animate-in fade-in duration-500 pb-12">
@@ -205,9 +223,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
                   </tr>
                </thead>
                <tbody className={`divide-y ${theme === 'dark' ? 'divide-slate-800/50' : 'divide-gray-100'}`}>
-                  {stats.dailyBreakdown.length === 0 ? (
-                     <tr><td colSpan={9} className="px-8 py-24 text-center opacity-30 font-black uppercase text-xs">No activity logged for this cycle</td></tr>
-                  ) : stats.dailyBreakdown.map((day: any) => {
+                  {(stats.dailyBreakdown || []).map((day: any) => {
                      const isLoss = day.netProfit < 0;
                      return (
                         <tr key={day.date} className="hover:bg-red-500/5 transition-colors group">
@@ -379,25 +395,6 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
            </div>
         </div>
       )}
-    </div>
-  );
-};
-
-const InsightCard: React.FC<{ label: string; value: string | number; icon: any; color: string; theme: 'dark' | 'light'; desc: string }> = ({ label, value, icon: Icon, color, theme, desc }) => {
-  const colors: any = {
-    green: 'text-green-500 bg-green-500/10 border-green-500/20 shadow-green-500/10',
-    blue: 'text-blue-500 bg-blue-500/10 border-blue-500/20 shadow-blue-500/10',
-    red: 'text-red-500 bg-red-500/10 border-red-500/20 shadow-red-500/10',
-    orange: 'text-orange-500 bg-orange-500/10 border-orange-500/20 shadow-orange-500/10',
-  };
-  return (
-    <div className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-200 shadow-sm'} border-2 p-8 rounded-[2rem] shadow-xl relative overflow-hidden group hover:scale-[1.02] transition-all`}>
-      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-6 border ${colors[color]} shadow-lg transition-transform`}>
-        <Icon className="w-7 h-7" />
-      </div>
-      <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">{label}</p>
-      <p className={`text-3xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-900'} mt-2 tracking-tight uppercase truncate`}>{value}</p>
-      <p className="text-[10px] font-medium text-slate-500 uppercase mt-4">{desc}</p>
     </div>
   );
 };

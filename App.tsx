@@ -36,6 +36,18 @@ import ContentView from './views/ContentView';
 import CalendarView from './views/CalendarView';
 import VersionsView from './views/VersionsView';
 
+// Nav items must be defined at the top to avoid hoisting errors
+const navItems = [
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'sales', label: 'Sales Hub', icon: TrendingUp },
+  { id: 'expenses', label: 'Expenses', icon: Receipt },
+  { id: 'calendar', label: 'Calendar', icon: Calendar },
+  { id: 'tasks', label: 'Tasks', icon: CheckSquare },
+  { id: 'team', label: 'Team', icon: Users },
+  { id: 'content', label: 'Content', icon: Film },
+  { id: 'versions', label: 'History', icon: History },
+];
+
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isLoading, setIsLoading] = useState(true);
@@ -82,7 +94,7 @@ const App: React.FC = () => {
       if (a && a.length > 0) setAgents(a.map(item => item.data));
       if (tm && tm.length > 0) setTeamMembers(tm.map(item => item.data));
       if (v) setVersions(v.map(item => item.data));
-      if (cfg) setMonthlyTarget(cfg.value);
+      if (cfg && cfg.value !== undefined) setMonthlyTarget(cfg.value);
 
       const savedTheme = localStorage.getItem('lm_theme') as 'dark' | 'light';
       if (savedTheme) setTheme(savedTheme);
@@ -100,7 +112,6 @@ const App: React.FC = () => {
     fetchAllData();
   }, []);
 
-  // Optimized debounce persist using upsert
   const persist = async (table: string, data: any[], isConfig: boolean = false) => {
     if (!initialLoadDone.current) return;
     
@@ -114,19 +125,14 @@ const App: React.FC = () => {
         if (isConfig) {
           await supabase.from(table).upsert({ key: 'monthly_target', value: data });
         } else {
-          // Efficient update: Send all items as a batch to upsert
-          const rows = data.map(item => ({ 
+          const rows = (data || []).map(item => ({ 
             id: item.id || Math.random().toString(36).substr(2, 9), 
             data: item 
           }));
           
+          await supabase.from(table).delete().neq('id', 'SYSTEM_RESERVED_ROOT');
           if (rows.length > 0) {
-            // First, clear current to ensure deletions are synced
-            await supabase.from(table).delete().neq('id', 'SYSTEM_RESERVED_ROOT');
-            // Then insert current state
             await supabase.from(table).insert(rows);
-          } else {
-            await supabase.from(table).delete().neq('id', 'SYSTEM_RESERVED_ROOT');
           }
         }
         setLastSyncTime(new Date().toLocaleTimeString());
@@ -325,7 +331,6 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      {/* Persistence Safety Modal if Sync Fails */}
       {!isLoading && !initialLoadDone.current && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90">
            <div className="bg-slate-900 border border-red-500/30 p-10 rounded-3xl max-w-sm text-center">
@@ -339,16 +344,5 @@ const App: React.FC = () => {
     </div>
   );
 };
-
-const navItems = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'sales', label: 'Sales Hub', icon: TrendingUp },
-  { id: 'expenses', label: 'Expenses', icon: Receipt },
-  { id: 'calendar', label: 'Calendar', icon: Calendar },
-  { id: 'tasks', label: 'Tasks', icon: CheckSquare },
-  { id: 'team', label: 'Team', icon: Users },
-  { id: 'content', label: 'Content', icon: Film },
-  { id: 'versions', label: 'History', icon: History },
-];
 
 export default App;
