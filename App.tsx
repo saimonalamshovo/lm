@@ -1,3 +1,31 @@
+import { supabase } from './supabase';
+
+useEffect(() => {
+  const load = async () => {
+    const { data } = await supabase
+      .from('app_data')
+      .select('data')
+      .eq('id', 'main')
+      .single();
+
+    if (!data?.data) return;
+
+    const d = data.data;
+    setSales(d.sales || []);
+    setExpenses(d.expenses || []);
+    setTasks(d.tasks || []);
+    setLeads(d.leads || []);
+    setContent(d.content || []);
+    setAgents(d.agents || []);
+    setTeamMembers(d.teamMembers || []);
+    setVersions(d.versions || []);
+    setMonthlyTarget(d.monthlyTarget || 0);
+    setTheme(d.theme || 'dark');
+  };
+
+  load();
+}, []);
+
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
