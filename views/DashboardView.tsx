@@ -15,7 +15,7 @@ import {
   Coins,
   Rocket,
   Plus,
-  BarChart4,
+  BarChart3,
   ArrowRightCircle,
   Sparkles,
   Zap,
@@ -35,7 +35,7 @@ const InsightCard: React.FC<{ label: string; value: string | number; icon: any; 
   };
   return (
     <div className={`${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-200 shadow-sm'} border-2 p-8 rounded-[2rem] shadow-xl relative overflow-hidden group hover:scale-[1.02] transition-all`}>
-      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-6 border ${colors[color]} shadow-lg transition-transform`}>
+      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-6 border ${colors[color] || colors.blue} shadow-lg transition-transform`}>
         <Icon className="w-7 h-7" />
       </div>
       <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">{label}</p>
@@ -65,7 +65,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
     setTempTarget(monthlyTarget.toString());
   }, [monthlyTarget]);
 
-  const progressPercent = monthlyTarget > 0 ? Math.min(100, ((stats.totalRevenue || 0) / monthlyTarget * 100)) : 0;
+  const progressPercent = monthlyTarget > 0 ? Math.min(100, ((stats?.totalRevenue || 0) / monthlyTarget * 100)) : 0;
   
   const handleSaveTarget = () => {
     const num = parseInt(tempTarget.replace(/[^0-9]/g, ''));
@@ -118,13 +118,13 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
                   <div>
                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Distance to Target</p>
-                     <p className="text-5xl font-black text-red-600 tabular-nums tracking-tighter">৳{formatNum(stats.targetLeft)}</p>
+                     <p className="text-5xl font-black text-red-600 tabular-nums tracking-tighter">৳{formatNum(stats?.targetLeft)}</p>
                      <p className="text-[10px] text-slate-500 font-bold mt-2 uppercase">REMAINING GAP</p>
                   </div>
                   <div>
                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Daily Quota Required</p>
-                     <p className="text-5xl font-black text-yellow-500 tabular-nums tracking-tighter">৳{formatNum(Math.round(stats.dailyRequired))}</p>
-                     <p className="text-[10px] text-slate-500 font-bold mt-2 uppercase">FOR {stats.remainingDays} MORE DAYS</p>
+                     <p className="text-5xl font-black text-yellow-500 tabular-nums tracking-tighter">৳{formatNum(Math.round(stats?.dailyRequired || 0))}</p>
+                     <p className="text-[10px] text-slate-500 font-bold mt-2 uppercase">FOR {stats?.remainingDays || 0} MORE DAYS</p>
                   </div>
                   <div className="bg-slate-800/20 p-6 rounded-3xl border border-slate-700/30 flex flex-col justify-center">
                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 text-center">Velocity Score</p>
@@ -165,19 +165,19 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
             <div className="flex-1 grid grid-cols-2 lg:grid-cols-4 gap-6 w-full">
                <div className="flex flex-col items-center lg:items-start">
                   <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1"><Zap className="w-2 h-2 text-yellow-500" /> Revenue</span>
-                  <p className={`text-2xl font-black ${textColor} tabular-nums`}>৳{formatNum(stats.todayRevenue)}</p>
+                  <p className={`text-2xl font-black ${textColor} tabular-nums`}>৳{formatNum(stats?.todayRevenue)}</p>
                </div>
                <div className="flex flex-col items-center lg:items-start">
                   <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1"><Flame className="w-2 h-2 text-red-500" /> Ad Burn</span>
-                  <p className="text-2xl font-black text-red-500 tabular-nums">৳{formatNum(stats.todayAdCost)}</p>
+                  <p className="text-2xl font-black text-red-500 tabular-nums">৳{formatNum(stats?.todayAdCost)}</p>
                </div>
                <div className="flex flex-col items-center lg:items-start">
-                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1"><BarChart4 className="w-2 h-2 text-green-500" /> Net Profit</span>
-                  <p className="text-2xl font-black text-green-500 tabular-nums">৳{formatNum(stats.todayNetProfit)}</p>
+                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1"><BarChart3 className="w-2 h-2 text-green-500" /> Net Profit</span>
+                  <p className="text-2xl font-black text-green-500 tabular-nums">৳{formatNum(stats?.todayNetProfit)}</p>
                </div>
                <div className="flex flex-col items-center lg:items-start">
                   <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1"><History className="w-2 h-2 text-blue-500" /> Ops Count</span>
-                  <p className="text-2xl font-black text-blue-500 tabular-nums">{stats.todayCount} Sales</p>
+                  <p className="text-2xl font-black text-blue-500 tabular-nums">{stats?.todayCount || 0} Sales</p>
                </div>
             </div>
          </div>
@@ -185,10 +185,10 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
 
       {/* CORE FINANCIAL METRICS */}
       <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-         <InsightCard label="Global ROI" value={`${stats.roi.toFixed(2)}x`} icon={Rocket} color="green" theme={theme} desc={`Yield on Market Spend`} />
-         <InsightCard label="Gross Revenue" value={`৳${formatNum(stats.totalRevenue)}`} icon={Coins} color="blue" theme={theme} desc="Total cash inflow" />
-         <InsightCard label="Market Spend" value={`৳${formatNum(stats.totalAdCost)}`} icon={Flame} color="red" theme={theme} desc="Total monthly ad burn" />
-         <InsightCard label="Monthly Profit" value={`৳${formatNum(stats.netProfit)}`} icon={BarChart4} color="orange" theme={theme} desc="Final after ads & ops" />
+         <InsightCard label="Global ROI" value={`${(stats?.roi || 0).toFixed(2)}x`} icon={Rocket} color="green" theme={theme} desc={`Yield on Market Spend`} />
+         <InsightCard label="Gross Revenue" value={`৳${formatNum(stats?.totalRevenue)}`} icon={Coins} color="blue" theme={theme} desc="Total cash inflow" />
+         <InsightCard label="Market Spend" value={`৳${formatNum(stats?.totalAdCost)}`} icon={Flame} color="red" theme={theme} desc="Total monthly ad burn" />
+         <InsightCard label="Monthly Profit" value={`৳${formatNum(stats?.netProfit)}`} icon={BarChart3} color="orange" theme={theme} desc="Final after ads & ops" />
       </section>
 
       {/* MONTHLY DAILY SUMMARY LEDGER */}
@@ -223,7 +223,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
                   </tr>
                </thead>
                <tbody className={`divide-y ${theme === 'dark' ? 'divide-slate-800/50' : 'divide-gray-100'}`}>
-                  {(stats.dailyBreakdown || []).map((day: any) => {
+                  {(stats?.dailyBreakdown || []).map((day: any) => {
                      const isLoss = day.netProfit < 0;
                      return (
                         <tr key={day.date} className="hover:bg-red-500/5 transition-colors group">
@@ -267,7 +267,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
            </div>
 
            <div className="flex-1 space-y-4 overflow-y-auto max-h-[520px] pr-2 custom-scrollbar">
-              {(stats.agentLeaderboard || []).map((a: any, idx: number) => (
+              {(stats?.agentLeaderboard || []).map((a: any, idx: number) => (
                 <div key={a.id} className={`${theme === 'dark' ? 'bg-slate-800/40' : 'bg-gray-50'} p-6 rounded-[2rem] border flex items-center justify-between group hover:border-red-500/40 transition-all shadow-sm`}>
                    <div className="flex items-center gap-5">
                       <div className="relative">
@@ -281,7 +281,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
                         <div className="flex gap-4 items-center mt-2">
                            <div className="flex flex-col">
                               <span className="text-[9px] font-bold text-slate-500 uppercase">ROI</span>
-                              <span className="text-xs font-bold text-green-500">{a.roi.toFixed(2)}x</span>
+                              <span className="text-xs font-bold text-green-500">{(a.roi || 0).toFixed(2)}x</span>
                            </div>
                            <div className="w-[1px] h-4 bg-slate-700/50" />
                            <div className="flex flex-col">
@@ -317,8 +317,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
                         <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Call Center Revenue</p>
                         <PhoneCall className="w-5 h-5 text-blue-500" />
                      </div>
-                     <p className={`text-6xl font-black ${textColor} tracking-tighter tabular-nums`}>৳{formatNum(stats.callRevenue)}</p>
-                     <p className="text-xs font-bold text-slate-500 mt-4 uppercase">{(stats.callRevenue / Math.max(1, stats.totalRevenue) * 100).toFixed(1)}% SHARE</p>
+                     <p className={`text-6xl font-black ${textColor} tracking-tighter tabular-nums`}>৳{formatNum(stats?.callRevenue)}</p>
+                     <p className="text-xs font-bold text-slate-500 mt-4 uppercase">{(stats?.callRevenue / Math.max(1, stats?.totalRevenue || 1) * 100).toFixed(1)}% SHARE</p>
                   </div>
                </div>
                
@@ -328,8 +328,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
                         <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Direct Web Sales</p>
                         <Globe className="w-5 h-5 text-orange-500" />
                      </div>
-                     <p className={`text-6xl font-black ${textColor} tracking-tighter tabular-nums`}>৳{formatNum(stats.websiteRevenue)}</p>
-                     <p className="text-xs font-bold text-slate-500 mt-4 uppercase">{(stats.websiteRevenue / Math.max(1, stats.totalRevenue) * 100).toFixed(1)}% SHARE</p>
+                     <p className={`text-6xl font-black ${textColor} tracking-tighter tabular-nums`}>৳{formatNum(stats?.websiteRevenue)}</p>
+                     <p className="text-xs font-bold text-slate-500 mt-4 uppercase">{(stats?.websiteRevenue / Math.max(1, stats?.totalRevenue || 1) * 100).toFixed(1)}% SHARE</p>
                   </div>
                </div>
             </div>

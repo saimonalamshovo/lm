@@ -10,19 +10,14 @@ import {
   Calendar, 
   Sun, 
   Moon,
-  RotateCcw,
   ShieldCheck,
   History,
-  X,
-  Download,
-  Save,
   BarChart3,
   Loader2,
   CloudUpload,
   RefreshCw,
   AlertCircle
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
 import { supabase } from './supabaseClient';
 import { Task, Lead, Sale, Expense, ContentItem, Agent, TeamMember, Version } from './types';
 import { INITIAL_TEAM, INITIAL_AGENTS, DEFAULT_MONTHLY_TARGET } from './constants';
@@ -36,7 +31,6 @@ import ContentView from './views/ContentView';
 import CalendarView from './views/CalendarView';
 import VersionsView from './views/VersionsView';
 
-// Nav items must be defined at the top to avoid hoisting errors
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'sales', label: 'Sales Hub', icon: TrendingUp },
@@ -86,14 +80,14 @@ const App: React.FC = () => {
         supabase.from('app_config').select('*').eq('key', 'monthly_target').maybeSingle()
       ]);
 
-      if (t) setTasks(t.map(item => item.data));
-      if (l) setLeads(l.map(item => item.data));
-      if (s) setSales(s.map(item => item.data));
-      if (e) setExpenses(e.map(item => item.data));
-      if (c) setContent(c.map(item => item.data));
-      if (a && a.length > 0) setAgents(a.map(item => item.data));
-      if (tm && tm.length > 0) setTeamMembers(tm.map(item => item.data));
-      if (v) setVersions(v.map(item => item.data));
+      if (t) setTasks(t.map((item: any) => item.data));
+      if (l) setLeads(l.map((item: any) => item.data));
+      if (s) setSales(s.map((item: any) => item.data));
+      if (e) setExpenses(e.map((item: any) => item.data));
+      if (c) setContent(c.map((item: any) => item.data));
+      if (a && a.length > 0) setAgents(a.map((item: any) => item.data));
+      if (tm && tm.length > 0) setTeamMembers(tm.map((item: any) => item.data));
+      if (v) setVersions(v.map((item: any) => item.data));
       if (cfg && cfg.value !== undefined) setMonthlyTarget(cfg.value);
 
       const savedTheme = localStorage.getItem('lm_theme') as 'dark' | 'light';
@@ -141,7 +135,7 @@ const App: React.FC = () => {
       } finally {
         setIsSyncing(false);
       }
-    }, 1000);
+    }, 1500);
   };
 
   useEffect(() => { persist('tasks', tasks); }, [tasks]);
@@ -162,8 +156,8 @@ const App: React.FC = () => {
     const startOfMonth = new Date(dhakaNow.getFullYear(), dhakaNow.getMonth(), 1);
     const todayStr = dhakaNow.toISOString().split('T')[0];
 
-    const currentMonthSales = sales.filter(s => new Date(s.createdAt) >= startOfMonth);
-    const currentMonthExpenses = expenses.filter(e => new Date(e.date) >= startOfMonth);
+    const currentMonthSales = (sales || []).filter(s => new Date(s.createdAt) >= startOfMonth);
+    const currentMonthExpenses = (expenses || []).filter(e => new Date(e.date) >= startOfMonth);
     
     const totalRevenue = currentMonthSales.reduce((acc, s) => acc + (s.amount || 0), 0);
     const totalAdCost = currentMonthSales.reduce((acc, s) => acc + (s.adCost || 0), 0) + 
@@ -173,16 +167,22 @@ const App: React.FC = () => {
     const netProfit = totalRevenue - totalAdCost - operationalCosts;
     const roi = totalAdCost > 0 ? (totalRevenue / totalAdCost) : 0;
 
-    const targetLeft = Math.max(0, monthlyTarget - totalRevenue);
+    const targetLeft = Math.max(0, (monthlyTarget || 0) - totalRevenue);
     const dailyRequired = targetLeft / remainingDays;
+
+    const todaySales = (sales || []).filter(s => s.createdAt.startsWith(todayStr));
+    const todayRevenue = todaySales.reduce((acc, s) => acc + (s.amount || 0), 0);
+    const todayAdCost = todaySales.reduce((acc, s) => acc + (s.adCost || 0), 0) + 
+                       (expenses || []).filter(e => e.date === todayStr && e.type === 'adcost').reduce((acc, e) => acc + (e.amount || 0), 0);
+    const todayNetProfit = todayRevenue - todayAdCost - (expenses || []).filter(e => e.date === todayStr && e.type !== 'adcost').reduce((acc, e) => acc + (e.amount || 0), 0);
 
     const dailyBreakdown = [];
     for (let i = 1; i <= lastDayOfMonth; i++) {
       const date = new Date(dhakaNow.getFullYear(), dhakaNow.getMonth(), i);
       const dateStr = date.toISOString().split('T')[0];
       
-      const daySales = sales.filter(s => s.createdAt.startsWith(dateStr));
-      const dayExpenses = expenses.filter(e => e.date === dateStr);
+      const daySales = (sales || []).filter(s => s.createdAt.startsWith(dateStr));
+      const dayExpenses = (expenses || []).filter(e => e.date === dateStr);
       
       const revCall = daySales.filter(s => s.type === 'call').reduce((acc, s) => acc + (s.amount || 0), 0);
       const adsCall = daySales.filter(s => s.type === 'call').reduce((acc, s) => acc + (s.adCost || 0), 0);
@@ -207,10 +207,10 @@ const App: React.FC = () => {
 
     return {
       totalRevenue, totalAdCost, netProfit, roi, targetLeft, dailyRequired,
-      remainingDays, todayRevenue: sales.filter(s => s.createdAt.startsWith(todayStr)).reduce((acc, s) => acc + (s.amount || 0), 0),
-      todayCount: sales.filter(s => s.createdAt.startsWith(todayStr)).length,
+      remainingDays, todayRevenue, todayAdCost, todayNetProfit,
+      todayCount: todaySales.length,
       dailyBreakdown: dailyBreakdown.reverse(),
-      agentLeaderboard: agents.map(agent => {
+      agentLeaderboard: (agents || []).map(agent => {
         const agentSales = currentMonthSales.filter(s => s.agentId === agent.id);
         const rev = agentSales.reduce((acc, s) => acc + (s.amount || 0), 0);
         const cost = agentSales.reduce((acc, s) => acc + (s.adCost || 0), 0);
@@ -225,14 +225,14 @@ const App: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950 gap-6">
+      <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-950 gap-6">
         <div className="relative">
           <Loader2 className="w-16 h-16 text-red-600 animate-spin" />
           <CloudUpload className="w-6 h-6 text-white absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
         </div>
-        <div className="text-center space-y-2">
+        <div className="text-center space-y-2 px-10">
           <h2 className="text-white font-black uppercase tracking-widest text-xl">Connecting to Cloud Matrix</h2>
-          <p className="text-slate-500 text-xs font-bold uppercase tracking-tighter">Synchronizing global operations ledger...</p>
+          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-tighter">Synchronizing global operations ledger...</p>
         </div>
       </div>
     );
