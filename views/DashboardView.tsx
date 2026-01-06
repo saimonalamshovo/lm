@@ -17,7 +17,12 @@ import {
   Plus,
   BarChart4,
   ArrowRightCircle,
-  Sparkles
+  Sparkles,
+  Zap,
+  Activity,
+  History,
+  ShieldCheck,
+  CalendarDays
 } from 'lucide-react';
 import { Sale } from '../types';
 
@@ -74,7 +79,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
   const labelColor = theme === 'dark' ? 'text-slate-500' : 'text-gray-400';
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 pb-10">
+    <div className="space-y-10 animate-in fade-in duration-500 pb-12">
       {/* TARGET TRACKER SECTION */}
       <section className={`${cardBg} border-2 border-red-600/20 rounded-[2.5rem] p-10 shadow-2xl relative overflow-hidden`}>
          <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none">
@@ -125,13 +130,113 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
          </div>
       </section>
 
+      {/* TODAY'S MISSION PULSE */}
+      <section className={`${cardBg} border-2 border-indigo-600/10 rounded-[2.5rem] p-8 shadow-xl overflow-hidden relative group hover:border-indigo-600/30 transition-all`}>
+         <div className="absolute top-0 left-0 w-2 h-full bg-indigo-600 opacity-20" />
+         <div className="flex flex-col md:flex-row items-center justify-between gap-8 relative z-10">
+            <div className="flex items-center gap-4 border-r border-slate-800/20 pr-8">
+               <div className="w-12 h-12 bg-indigo-600/10 rounded-2xl flex items-center justify-center">
+                  <Activity className="w-6 h-6 text-indigo-500" />
+               </div>
+               <div>
+                  <h3 className={`text-lg font-black ${textColor} uppercase leading-none`}>Today's Mission Pulse</h3>
+                  <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1">Real-time Intelligence</p>
+               </div>
+            </div>
+
+            <div className="flex-1 grid grid-cols-2 lg:grid-cols-4 gap-6 w-full">
+               <div className="flex flex-col items-center lg:items-start">
+                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1"><Zap className="w-2 h-2 text-yellow-500" /> Revenue</span>
+                  <p className={`text-2xl font-black ${textColor} tabular-nums`}>৳{formatNum(stats.todayRevenue)}</p>
+               </div>
+               <div className="flex flex-col items-center lg:items-start">
+                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1"><Flame className="w-2 h-2 text-red-500" /> Ad Burn</span>
+                  <p className="text-2xl font-black text-red-500 tabular-nums">৳{formatNum(stats.todayAdCost)}</p>
+               </div>
+               <div className="flex flex-col items-center lg:items-start">
+                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1"><BarChart4 className="w-2 h-2 text-green-500" /> Net Profit</span>
+                  <p className="text-2xl font-black text-green-500 tabular-nums">৳{formatNum(stats.todayNetProfit)}</p>
+               </div>
+               <div className="flex flex-col items-center lg:items-start">
+                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1"><History className="w-2 h-2 text-blue-500" /> Ops Count</span>
+                  <p className="text-2xl font-black text-blue-500 tabular-nums">{stats.todayCount} Sales</p>
+               </div>
+            </div>
+         </div>
+      </section>
+
       {/* CORE FINANCIAL METRICS */}
       <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
          <InsightCard label="Global ROI" value={`${stats.roi.toFixed(2)}x`} icon={Rocket} color="green" theme={theme} desc={`Yield on Market Spend`} />
          <InsightCard label="Gross Revenue" value={`৳${formatNum(stats.totalRevenue)}`} icon={Coins} color="blue" theme={theme} desc="Total cash inflow" />
          <InsightCard label="Market Spend" value={`৳${formatNum(stats.totalAdCost)}`} icon={Flame} color="red" theme={theme} desc="Total monthly ad burn" />
-         {/* Profit Section replacing Conversion Rate */}
          <InsightCard label="Monthly Profit" value={`৳${formatNum(stats.netProfit)}`} icon={BarChart4} color="orange" theme={theme} desc="Final after ads & ops" />
+      </section>
+
+      {/* MONTHLY DAILY SUMMARY LEDGER (EXPANDED TO 9 COLUMNS) */}
+      <section className={`${cardBg} border-2 border-slate-800/10 rounded-[2.5rem] p-10 shadow-2xl overflow-hidden`}>
+         <div className="flex items-center justify-between mb-8 pb-6 border-b border-slate-800/20">
+            <div>
+               <h3 className={`text-xl font-bold ${textColor} flex items-center gap-3 uppercase tracking-tight`}>
+                  <CalendarDays className="w-6 h-6 text-red-600" />
+                  Monthly Operations Ledger
+               </h3>
+               <p className="text-[10px] font-bold text-slate-500 mt-1 uppercase tracking-widest">Audited 9-Point Performance Matrix</p>
+            </div>
+            <div className="px-4 py-2 bg-slate-800/50 rounded-2xl border border-slate-700/50 flex items-center gap-3">
+               <ShieldCheck className="w-4 h-4 text-green-500" />
+               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Financial Integrity Verified</span>
+            </div>
+         </div>
+
+         <div className="overflow-x-auto custom-scrollbar pb-4">
+            <table className="w-full text-left border-collapse min-w-[1200px]">
+               <thead>
+                  <tr className={theme === 'dark' ? 'bg-slate-950/80' : 'bg-gray-100'}>
+                     <th className="px-6 py-5 text-[9px] font-black text-slate-500 uppercase tracking-widest sticky left-0 z-20 bg-inherit shadow-md">Mission Date</th>
+                     <th className="px-6 py-5 text-[9px] font-black text-slate-500 uppercase tracking-widest text-right">Total Expenses (৳)</th>
+                     <th className="px-6 py-5 text-[9px] font-black text-blue-500 uppercase tracking-widest text-right bg-blue-500/5 border-x border-blue-500/10">Ads (Call Center)</th>
+                     <th className="px-6 py-5 text-[9px] font-black text-blue-500 uppercase tracking-widest text-right bg-blue-500/5 border-r border-blue-500/10">Rev (Call Center)</th>
+                     <th className="px-6 py-5 text-[9px] font-black text-orange-500 uppercase tracking-widest text-right bg-orange-500/5 border-x border-orange-500/10">Ads (Website)</th>
+                     <th className="px-6 py-5 text-[9px] font-black text-orange-500 uppercase tracking-widest text-right bg-orange-500/5 border-r border-orange-500/10">Rev (Website)</th>
+                     <th className="px-6 py-5 text-[9px] font-black text-red-500 uppercase tracking-widest text-right">Total Ad Burn (৳)</th>
+                     <th className="px-6 py-5 text-[9px] font-black text-green-500 uppercase tracking-widest text-right">Total Revenue (৳)</th>
+                     <th className="px-6 py-5 text-[9px] font-black text-white uppercase tracking-widest text-right bg-slate-800 shadow-inner">Net Profit (৳)</th>
+                  </tr>
+               </thead>
+               <tbody className={`divide-y ${theme === 'dark' ? 'divide-slate-800/50' : 'divide-gray-100'}`}>
+                  {stats.dailyBreakdown.length === 0 ? (
+                     <tr><td colSpan={9} className="px-8 py-24 text-center opacity-30 font-black uppercase text-xs">No activity logged for this cycle</td></tr>
+                  ) : stats.dailyBreakdown.map((day: any) => {
+                     const isLoss = day.profit < 0;
+                     return (
+                        <tr key={day.date} className="hover:bg-red-500/5 transition-colors group">
+                           <td className="px-6 py-5 sticky left-0 z-10 bg-inherit border-r border-slate-800/10">
+                              <p className={`text-xs font-black ${textColor}`}>{new Date(day.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</p>
+                              <p className="text-[8px] text-slate-500 font-bold uppercase mt-1">Shift {day.day}</p>
+                           </td>
+                           <td className="px-6 py-5 text-right font-bold text-xs text-slate-400">৳{formatNum(day.totalExp)}</td>
+                           
+                           {/* Call Center Block */}
+                           <td className="px-6 py-5 text-right font-black text-xs text-blue-400 bg-blue-500/5 border-x border-slate-800/10 italic">৳{formatNum(day.adsCall)}</td>
+                           <td className="px-6 py-5 text-right font-black text-xs text-blue-500 bg-blue-500/5 border-r border-slate-800/10">৳{formatNum(day.revCall)}</td>
+                           
+                           {/* Website Block */}
+                           <td className="px-6 py-5 text-right font-black text-xs text-orange-400 bg-orange-500/5 border-x border-slate-800/10 italic">৳{formatNum(day.adsWeb)}</td>
+                           <td className="px-6 py-5 text-right font-black text-xs text-orange-500 bg-orange-500/5 border-r border-slate-800/10">৳{formatNum(day.revWeb)}</td>
+                           
+                           <td className="px-6 py-5 text-right font-black text-xs text-red-500 tabular-nums">৳{formatNum(day.totalAds)}</td>
+                           <td className="px-6 py-5 text-right font-black text-xs text-green-500 tabular-nums">৳{formatNum(day.totalRev)}</td>
+                           
+                           <td className={`px-6 py-5 text-right font-black text-sm tabular-nums shadow-inner ${isLoss ? 'bg-red-900/10 text-red-500' : 'bg-green-900/10 text-green-500'}`}>
+                              {day.profit < 0 ? '-' : ''}৳{formatNum(Math.abs(day.profit))}
+                           </td>
+                        </tr>
+                     );
+                  })}
+               </tbody>
+            </table>
+         </div>
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -221,7 +326,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
       {/* MODALS */}
       {showTargetModal && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-xl">
-           <div className={`${cardBg} border-2 border-slate-800 rounded-[3rem] p-12 w-full max-w-md shadow-2xl animate-in zoom-in-95`}>
+           <div className={`${cardBg} border-2 border-slate-800 rounded-[3rem] p-12 w-full max-md shadow-2xl animate-in zoom-in-95`}>
               <div className="flex justify-between items-center mb-10">
                  <h3 className={`text-2xl font-bold ${textColor} uppercase tracking-tight`}>Adjust Revenue Goal</h3>
                  <button onClick={() => setShowTargetModal(false)} className="text-slate-500 hover:text-red-500"><X className="w-7 h-7" /></button>
@@ -238,7 +343,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
                       autoFocus
                     />
                  </div>
-                 <button onClick={handleSaveTarget} className="w-full py-6 bg-red-600 text-white font-bold rounded-3xl shadow-2xl uppercase tracking-[0.2em]">SAVE NEW TARGET</button>
+                 <button onClick={handleSaveTarget} className="w-full py-6 bg-red-600 text-white font-black rounded-3xl shadow-2xl uppercase tracking-[0.2em]">SAVE NEW TARGET</button>
               </div>
            </div>
         </div>
@@ -246,7 +351,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
 
       {showQuickWebModal && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-xl">
-           <div className={`${cardBg} border-2 border-slate-800 rounded-[3rem] p-12 w-full max-w-md shadow-2xl animate-in zoom-in-95`}>
+           <div className={`${cardBg} border-2 border-slate-800 rounded-[3rem] p-12 w-full max-md shadow-2xl animate-in zoom-in-95`}>
               <div className="flex justify-between items-center mb-10">
                  <h3 className={`text-2xl font-bold ${textColor} uppercase tracking-tight`}>Direct Web Log</h3>
                  <button onClick={() => setShowQuickWebModal(false)} className="text-slate-500 hover:text-orange-500"><X className="w-7 h-7" /></button>
@@ -272,7 +377,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
                       onChange={e => setWebDate(e.target.value)}
                     />
                  </div>
-                 <button onClick={handleQuickWebSale} className="w-full py-6 bg-orange-600 text-white font-bold rounded-3xl shadow-2xl uppercase tracking-[0.2em] mt-4">RECORD TRANSACTION</button>
+                 <button onClick={handleQuickWebSale} className="w-full py-6 bg-orange-600 text-white font-black rounded-3xl shadow-2xl uppercase tracking-[0.2em] mt-4">RECORD TRANSACTION</button>
               </div>
            </div>
         </div>

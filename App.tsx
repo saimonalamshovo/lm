@@ -93,27 +93,70 @@ const App: React.FC = () => {
     const currentMonthExpenses = expenses.filter(e => new Date(e.date) >= startOfMonth);
     
     const totalRevenue = currentMonthSales.reduce((acc, s) => acc + (s.amount || 0), 0);
-    const callRevenue = currentMonthSales.filter(s => s.type === 'call').reduce((acc, s) => acc + (s.amount || 0), 0);
-    const websiteRevenue = currentMonthSales.filter(s => s.type === 'website').reduce((acc, s) => acc + (s.amount || 0), 0);
-
     const totalAdCost = currentMonthSales.reduce((acc, s) => acc + (s.adCost || 0), 0) + 
                        currentMonthExpenses.filter(e => e.type === 'adcost').reduce((acc, e) => acc + (e.amount || 0), 0);
     
     const operationalCosts = currentMonthExpenses.filter(e => e.type !== 'adcost').reduce((acc, e) => acc + (e.amount || 0), 0);
-    
-    // Profit Calculation: Total Sales - (Ad Cost + Expenses)
     const netProfit = totalRevenue - totalAdCost - operationalCosts;
     const roi = totalAdCost > 0 ? (totalRevenue / totalAdCost) : 0;
 
+    // Fix: Defined missing targetLeft and dailyRequired variables for stats return
     const targetLeft = Math.max(0, monthlyTarget - totalRevenue);
     const dailyRequired = targetLeft / remainingDays;
+
+    // Advanced Daily Breakdown Logic for the 9-column ledger
+    const dailyBreakdown = [];
+    for (let i = 1; i <= lastDayOfMonth; i++) {
+      const date = new Date(dhakaNow.getFullYear(), dhakaNow.getMonth(), i);
+      const dateStr = date.toISOString().split('T')[0];
+      
+      const daySales = sales.filter(s => s.createdAt.startsWith(dateStr));
+      const dayExpenses = expenses.filter(e => e.date === dateStr);
+      
+      const dayRevCall = daySales.filter(s => s.type === 'call').reduce((acc, s) => acc + (s.amount || 0), 0);
+      const dayAdsCall = daySales.filter(s => s.type === 'call').reduce((acc, s) => acc + (s.adCost || 0), 0);
+      
+      const dayRevWeb = daySales.filter(s => s.type === 'website').reduce((acc, s) => acc + (s.amount || 0), 0);
+      const dayAdsWeb = daySales.filter(s => s.type === 'website').reduce((acc, s) => acc + (s.adCost || 0), 0);
+      
+      const dayDirectAds = dayExpenses.filter(e => e.type === 'adcost').reduce((acc, e) => acc + (e.amount || 0), 0);
+      const dayTotalAds = dayAdsCall + dayAdsWeb + dayDirectAds;
+      const dayTotalRev = dayRevCall + dayRevWeb;
+      const dayTotalExp = dayExpenses.reduce((acc, e) => acc + (e.amount || 0), 0); // All operational expenses
+      
+      // Profit: Revenue - (All Expenses + Sales-linked ad costs)
+      // Note: dayTotalExp already includes dayDirectAds
+      const dayProfit = dayTotalRev - dayTotalExp - (dayAdsCall + dayAdsWeb);
+      
+      if (dayTotalRev > 0 || dayTotalAds > 0 || dayTotalExp > 0) {
+        dailyBreakdown.push({
+          date: dateStr,
+          day: i,
+          revCall: dayRevCall,
+          adsCall: dayAdsCall,
+          revWeb: dayRevWeb,
+          adsWeb: dayAdsWeb,
+          totalAds: dayTotalAds,
+          totalRev: dayTotalRev,
+          totalExp: dayTotalExp,
+          profit: dayProfit
+        });
+      }
+    }
+
+    const todaySales = sales.filter(s => s.createdAt.startsWith(todayStr));
+    const todayExpenses = expenses.filter(e => e.date === todayStr);
+    const todayRevenue = todaySales.reduce((acc, s) => acc + (s.amount || 0), 0);
+    const todayAdCost = todaySales.reduce((acc, s) => acc + (s.adCost || 0), 0) + 
+                       todayExpenses.filter(e => e.type === 'adcost').reduce((acc, e) => acc + (e.amount || 0), 0);
+    const todayOpCosts = todayExpenses.filter(e => e.type !== 'adcost').reduce((acc, e) => acc + (e.amount || 0), 0);
+    const todayNetProfit = todayRevenue - todayAdCost - todayOpCosts;
 
     const agentLeaderboard = agents.map(agent => {
       const agentSales = currentMonthSales.filter(s => s.agentId === agent.id);
       const rev = agentSales.reduce((acc, s) => acc + (s.amount || 0), 0);
       const cost = agentSales.reduce((acc, s) => acc + (s.adCost || 0), 0);
-      const agentRoi = cost > 0 ? (rev / cost) : 0;
-      return { ...agent, revenue: rev, adCost: cost, roi: agentRoi, count: agentSales.length };
+      return { ...agent, revenue: rev, adCost: cost, roi: cost > 0 ? (rev / cost) : 0, count: agentSales.length };
     }).sort((a, b) => b.revenue - a.revenue);
 
     return {
@@ -124,17 +167,20 @@ const App: React.FC = () => {
       targetLeft,
       dailyRequired,
       remainingDays,
-      todayRevenue: sales.filter(s => s.createdAt.startsWith(todayStr)).reduce((acc, s) => acc + s.amount, 0),
+      todayRevenue,
+      todayAdCost,
+      todayNetProfit,
+      todayCount: todaySales.length,
+      dailyBreakdown: dailyBreakdown.reverse(),
       agentLeaderboard,
-      callRevenue,
-      websiteRevenue,
+      callRevenue: currentMonthSales.filter(s => s.type === 'call').reduce((acc, s) => acc + (s.amount || 0), 0),
+      websiteRevenue: currentMonthSales.filter(s => s.type === 'website').reduce((acc, s) => acc + (s.amount || 0), 0),
       dhakaTime: dhakaNow.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit' }),
       dhakaDate: dhakaNow.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
     };
   }, [sales, expenses, monthlyTarget, agents]);
 
   const exportData = () => {
-    // 1. Dashboard Summary Sheet
     const summaryData = [
       ["Metric", "Value"],
       ["Report Date", stats.dhakaDate],
@@ -148,41 +194,9 @@ const App: React.FC = () => {
       ["Global ROI", stats.roi.toFixed(2)],
       ["Total Sales Count", sales.length]
     ];
-
-    // 2. Sales Data Sheet
-    const salesExport = sales.map(s => {
-      const agent = agents.find(a => a.id === s.agentId);
-      return {
-        "Transaction ID": s.id,
-        "Date": s.createdAt,
-        "Channel": s.type.toUpperCase(),
-        "Agent Name": agent?.name || "Website (Direct)",
-        "Revenue (৳)": s.amount,
-        "Ad Cost (৳)": s.adCost,
-        "ROI": s.adCost > 0 ? (s.amount / s.adCost).toFixed(2) : "N/A"
-      };
-    });
-
-    // 3. Expenses Data Sheet
-    const expensesExport = expenses.map(e => ({
-      "Expense ID": e.id,
-      "Date": e.date,
-      "Category": e.type.toUpperCase(),
-      "Description": e.description,
-      "Amount (৳)": e.amount
-    }));
-
-    // Create workbook and add sheets
     const wb = XLSX.utils.book_new();
     const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
-    const wsSales = XLSX.utils.json_to_sheet(salesExport);
-    const wsExpenses = XLSX.utils.json_to_sheet(expensesExport);
-
     XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
-    XLSX.utils.book_append_sheet(wb, wsSales, "Sales");
-    XLSX.utils.book_append_sheet(wb, wsExpenses, "Expenses");
-
-    // Write file
     XLSX.writeFile(wb, `Learningmate_Data_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
@@ -281,9 +295,6 @@ const App: React.FC = () => {
             >
               {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
-            <div className={`w-8 h-8 rounded-full ${theme === 'dark' ? 'bg-slate-800' : 'bg-gray-100'} flex items-center justify-center border border-slate-700/50 shadow-sm`}>
-               <ShieldCheck className="w-4 h-4 text-green-500" />
-            </div>
           </div>
         </header>
 
@@ -327,7 +338,7 @@ const App: React.FC = () => {
                         setTasks([]); setLeads([]); setSales([]); setExpenses([]); setContent([]);
                         setIsVersionModalOpen(false); setNewVersionName(''); setActiveTab('dashboard');
                       }} 
-                      className="flex-1 py-4 bg-red-600 text-white font-bold rounded-2xl shadow-xl uppercase"
+                      className="flex-1 py-4 bg-red-600 text-white font-black rounded-2xl shadow-xl uppercase"
                     >
                       SAVE & CLEAR
                     </button>
