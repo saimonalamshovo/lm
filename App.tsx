@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from './supabase';
 import * as XLSX from 'xlsx';
+
 import {
   LayoutDashboard,
   CheckSquare,
@@ -9,8 +10,6 @@ import {
   Receipt,
   Film,
   Calendar,
-  Sun,
-  Moon,
   History,
   Download,
 } from 'lucide-react';
@@ -30,19 +29,19 @@ import VersionsView from './views/VersionsView';
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-  const [monthlyTarget, setMonthlyTarget] = useState<number>(DEFAULT_MONTHLY_TARGET);
+  const [monthlyTarget, setMonthlyTarget] = useState(DEFAULT_MONTHLY_TARGET);
 
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [leads, setLeads] = useState<Lead[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [leads, setLeads] = useState<Lead[]>([]);
   const [content, setContent] = useState<ContentItem[]>([]);
   const [agents, setAgents] = useState<Agent[]>(INITIAL_AGENTS);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(INITIAL_TEAM);
   const [versions, setVersions] = useState<Version[]>([]);
 
   /* ===============================
-     LOAD DATA (ONCE)
+     INITIAL LOAD (DB → UI)
   =============================== */
   useEffect(() => {
     const load = async () => {
@@ -53,8 +52,8 @@ const App: React.FC = () => {
         .single();
 
       if (!data?.data) return;
-      const d = data.data;
 
+      const d = data.data;
       setSales(d.sales || []);
       setExpenses(d.expenses || []);
       setTasks(d.tasks || []);
@@ -71,12 +70,12 @@ const App: React.FC = () => {
   }, []);
 
   /* ===============================
-     AUTO SAVE (DEBOUNCED)
+     SAVE TO DB (SINGLE SOURCE)
   =============================== */
-  useEffect(() => {
-    const t = setTimeout(() => {
-      supabase.from('app_data').upsert({
-        id: 'main',
+  const saveToDB = async () => {
+    await supabase
+      .from('app_data')
+      .update({
         data: {
           sales,
           expenses,
@@ -89,18 +88,161 @@ const App: React.FC = () => {
           monthlyTarget,
           theme,
         },
-        updated_at: new Date(),
-      });
-    }, 300);
+      })
+      .eq('id', 'main');
+  };
+
+  /* ===============================
+     AUTO SAVE (DEBOUNCED)
+  =============================== */
+  useEffect(() => {
+    const t = setTimeout(() => {
+      saveToDB();
+    }, 400);
 
     return () => clearTimeout(t);
   }, [sales, expenses, tasks, leads, content, agents, teamMembers, versions, monthlyTarget, theme]);
 
   /* ===============================
-     REAL-TIME SYNC
+     REALTIME LISTENER
   =============================== */
   useEffect(() => {
     const channel = supabase
-      .channel('app_data_live')
-      .on(
-        'postgres_ch_
+      .channel('app_data:main')
+      .on('broadcast', { event: '*' }, payload => {
+        const d = payload.payload;
+        if (!d) return;
+
+        setSales(d.sales || []);
+        setExpenses(d.expenses || []);
+        setTasks(d.tasks || []);
+        setLeads(d.leads || []);
+        setContent(d.content || []);
+        setAgents(d.agents || INITIAL_AGENTS);
+        setTeamMembers(d.teamMembers || INITIAL_TEAM);
+        setVersions(d.versions || []);
+        setMonthlyTarget(d.monthlyTarget || DEFAULT_MONTHLY_TARGET);
+        setTheme(d.theme || 'dark');
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  /* ===============================
+     STATS
+  =============================== */
+  const stats = useMemo(() => {
+    const revenue = sales.reduce((a, b) => a + (b.amount || 0), 0);
+    const adCost = sales.reduce((a, b) => a + (b.adCost || 0), 0);
+    const profit = revenue - adCost;
+    const roi = adCost > 0 ? revenue / adCost : 0;
+
+    return { revenue, adCost, profit, roi };
+  }, [sales]);
+
+  /* ===============================
+     EXPORT
+  =============================== */
+  const exportData = () => {
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sales), 'Sales');
+    XLSX.writeFile(wb, 'Learningmate_Data.xlsx');
+  };
+
+  const navItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'sales', label: 'Sales', icon: TrendingUp },
+    { id: 'expenses', label: 'Expenses', icon: Receipt },
+    { id: 'calendar', label: 'Calendar', icon: Calendar },
+    { id: 'tasks', label: 'Tasks', icon: CheckSquare },
+    { id: 'team', label: 'Team', icon: Users },
+    { id: 'content', label: 'Content', icon: Film },
+    { id: 'versions', label: 'History', icon: History },
+  ];
+
+  return (
+    <div className={`flex h-full ${theme === 'dark' ? 'bg-slate-950 text-white' : 'bg-gray-50 text-black'}`}>
+      <aside className="w-64 bg-slate-900 p-4 hidden lg:block">
+        {navItems.map(item => (
+          <button
+            key={item.id}
+            onClick={() => setActiveTab(item.id)}
+            className="w-full flex items-center gap-3 p-3 rounded hover:bg-slate-800"
+          >
+            <item.icon className="w-4 h-4" />
+            {item.label}
+          </button>
+        ))}
+
+        <button
+          onClick={exportData}
+          className="mt-6 w-full flex items-center gap-2 p-3 bg-green-600 rounded"
+        >
+          <Download className="w-4 h-4" />
+          Export Excel
+        </button>
+      </aside>
+
+      <main className="flex-1 p-6 overflow-y-auto">
+        {activeTab === 'dashboard' && (
+          <DashboardView
+            stats={stats}
+            monthlyTarget={monthlyTarget}
+            onTargetChange={setMonthlyTarget}
+            theme={theme}
+            sales={sales}
+            setSales={setSales}
+          />
+        )}
+
+        {activeTab === 'sales' && (
+          <SalesView
+            sales={sales}
+            setSales={setSales}
+            leads={leads}
+            setLeads={setLeads}
+            agents={agents}
+            setAgents={setAgents}
+            theme={theme}
+          />
+        )}
+
+        {activeTab === 'expenses' && (
+          <ExpensesView expenses={expenses} setExpenses={setExpenses} agents={agents} theme={theme} />
+        )}
+
+        {activeTab === 'calendar' && (
+          <CalendarView
+            tasks={tasks}
+            sales={sales}
+            expenses={expenses}
+            teamMembers={teamMembers}
+            agents={agents}
+            theme={theme}
+          />
+        )}
+
+        {activeTab === 'tasks' && (
+          <TasksView tasks={tasks} setTasks={setTasks} teamMembers={teamMembers} theme={theme} />
+        )}
+
+        {activeTab === 'team' && (
+          <TeamView tasks={tasks} teamMembers={teamMembers} setTeamMembers={setTeamMembers} theme={theme} />
+        )}
+
+        {activeTab === 'content' && (
+          <ContentView content={content} setContent={setContent} theme={theme} />
+        )}
+
+        {activeTab === 'versions' && (
+          <VersionsView versions={versions} setVersions={setVersions} theme={theme} />
+        )}
+      </main>
+    </div>
+  );
+};
+
+export default App;
