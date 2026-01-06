@@ -14,8 +14,22 @@ import {
   Download,
 } from 'lucide-react';
 
-import { Task, Lead, Sale, Expense, ContentItem, Agent, TeamMember, Version } from './types';
-import { INITIAL_TEAM, INITIAL_AGENTS, DEFAULT_MONTHLY_TARGET } from './constants';
+import {
+  Task,
+  Lead,
+  Sale,
+  Expense,
+  ContentItem,
+  Agent,
+  TeamMember,
+  Version,
+} from './types';
+
+import {
+  INITIAL_TEAM,
+  INITIAL_AGENTS,
+  DEFAULT_MONTHLY_TARGET,
+} from './constants';
 
 import DashboardView from './views/DashboardView';
 import TasksView from './views/TasksView';
@@ -26,7 +40,12 @@ import ContentView from './views/ContentView';
 import CalendarView from './views/CalendarView';
 import VersionsView from './views/VersionsView';
 
+const APP_ID = 'main';
+
 const App: React.FC = () => {
+  /* ===============================
+     STATE
+  =============================== */
   const [activeTab, setActiveTab] = useState('dashboard');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [monthlyTarget, setMonthlyTarget] = useState(DEFAULT_MONTHLY_TARGET);
@@ -40,20 +59,26 @@ const App: React.FC = () => {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(INITIAL_TEAM);
   const [versions, setVersions] = useState<Version[]>([]);
 
+  const [isHydrated, setIsHydrated] = useState(false);
+
   /* ===============================
      INITIAL LOAD (DB → UI)
   =============================== */
   useEffect(() => {
     const load = async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('app_data')
         .select('data')
-        .eq('id', 'main')
+        .eq('id', APP_ID)
         .single();
 
-      if (!data?.data) return;
+      if (error || !data?.data) {
+        setIsHydrated(true);
+        return;
+      }
 
       const d = data.data;
+
       setSales(d.sales || []);
       setExpenses(d.expenses || []);
       setTasks(d.tasks || []);
@@ -64,66 +89,103 @@ const App: React.FC = () => {
       setVersions(d.versions || []);
       setMonthlyTarget(d.monthlyTarget || DEFAULT_MONTHLY_TARGET);
       setTheme(d.theme || 'dark');
+
+      setIsHydrated(true);
     };
 
     load();
   }, []);
 
   /* ===============================
-     SAVE TO DB (SINGLE SOURCE)
+     SAVE TO DB (UPSERT)
   =============================== */
   const saveToDB = async () => {
-    await supabase
+    if (!isHydrated) return;
+
+    const payload = {
+      sales,
+      expenses,
+      tasks,
+      leads,
+      content,
+      agents,
+      teamMembers,
+      versions,
+      monthlyTarget,
+      theme,
+    };
+
+    const { error } = await supabase
       .from('app_data')
-      .update({
-        data: {
-          sales,
-          expenses,
-          tasks,
-          leads,
-          content,
-          agents,
-          teamMembers,
-          versions,
-          monthlyTarget,
-          theme,
+      .upsert(
+        {
+          id: APP_ID,
+          data: payload,
+          updated_at: new Date().toISOString(),
         },
-      })
-      .eq('id', 'main');
+        { onConflict: 'id' }
+      );
+
+    if (error) {
+      console.error('❌ SAVE ERROR:', error);
+    }
   };
 
   /* ===============================
      AUTO SAVE (DEBOUNCED)
   =============================== */
   useEffect(() => {
+    if (!isHydrated) return;
+
     const t = setTimeout(() => {
       saveToDB();
-    }, 400);
+    }, 500);
 
     return () => clearTimeout(t);
-  }, [sales, expenses, tasks, leads, content, agents, teamMembers, versions, monthlyTarget, theme]);
+  }, [
+    sales,
+    expenses,
+    tasks,
+    leads,
+    content,
+    agents,
+    teamMembers,
+    versions,
+    monthlyTarget,
+    theme,
+    isHydrated,
+  ]);
 
   /* ===============================
-     REALTIME LISTENER
+     REALTIME SYNC (DB → ALL CLIENTS)
   =============================== */
   useEffect(() => {
     const channel = supabase
-      .channel('app_data:main')
-      .on('broadcast', { event: '*' }, payload => {
-        const d = payload.payload;
-        if (!d) return;
+      .channel('app_data_sync')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'app_data',
+          filter: `id=eq.${APP_ID}`,
+        },
+        payload => {
+          const d = payload.new?.data;
+          if (!d) return;
 
-        setSales(d.sales || []);
-        setExpenses(d.expenses || []);
-        setTasks(d.tasks || []);
-        setLeads(d.leads || []);
-        setContent(d.content || []);
-        setAgents(d.agents || INITIAL_AGENTS);
-        setTeamMembers(d.teamMembers || INITIAL_TEAM);
-        setVersions(d.versions || []);
-        setMonthlyTarget(d.monthlyTarget || DEFAULT_MONTHLY_TARGET);
-        setTheme(d.theme || 'dark');
-      })
+          setSales(d.sales || []);
+          setExpenses(d.expenses || []);
+          setTasks(d.tasks || []);
+          setLeads(d.leads || []);
+          setContent(d.content || []);
+          setAgents(d.agents || INITIAL_AGENTS);
+          setTeamMembers(d.teamMembers || INITIAL_TEAM);
+          setVersions(d.versions || []);
+          setMonthlyTarget(d.monthlyTarget || DEFAULT_MONTHLY_TARGET);
+          setTheme(d.theme || 'dark');
+        }
+      )
       .subscribe();
 
     return () => {
@@ -148,7 +210,11 @@ const App: React.FC = () => {
   =============================== */
   const exportData = () => {
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sales), 'Sales');
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.json_to_sheet(sales),
+      'Sales'
+    );
     XLSX.writeFile(wb, 'Learningmate_Data.xlsx');
   };
 
@@ -163,6 +229,9 @@ const App: React.FC = () => {
     { id: 'versions', label: 'History', icon: History },
   ];
 
+  /* ===============================
+     UI
+  =============================== */
   return (
     <div className={`flex h-full ${theme === 'dark' ? 'bg-slate-950 text-white' : 'bg-gray-50 text-black'}`}>
       <aside className="w-64 bg-slate-900 p-4 hidden lg:block">
@@ -170,7 +239,9 @@ const App: React.FC = () => {
           <button
             key={item.id}
             onClick={() => setActiveTab(item.id)}
-            className="w-full flex items-center gap-3 p-3 rounded hover:bg-slate-800"
+            className={`w-full flex items-center gap-3 p-3 rounded ${
+              activeTab === item.id ? 'bg-red-600/20 text-red-500' : 'hover:bg-slate-800'
+            }`}
           >
             <item.icon className="w-4 h-4" />
             {item.label}
@@ -211,7 +282,12 @@ const App: React.FC = () => {
         )}
 
         {activeTab === 'expenses' && (
-          <ExpensesView expenses={expenses} setExpenses={setExpenses} agents={agents} theme={theme} />
+          <ExpensesView
+            expenses={expenses}
+            setExpenses={setExpenses}
+            agents={agents}
+            theme={theme}
+          />
         )}
 
         {activeTab === 'calendar' && (
@@ -226,19 +302,37 @@ const App: React.FC = () => {
         )}
 
         {activeTab === 'tasks' && (
-          <TasksView tasks={tasks} setTasks={setTasks} teamMembers={teamMembers} theme={theme} />
+          <TasksView
+            tasks={tasks}
+            setTasks={setTasks}
+            teamMembers={teamMembers}
+            theme={theme}
+          />
         )}
 
         {activeTab === 'team' && (
-          <TeamView tasks={tasks} teamMembers={teamMembers} setTeamMembers={setTeamMembers} theme={theme} />
+          <TeamView
+            tasks={tasks}
+            teamMembers={teamMembers}
+            setTeamMembers={setTeamMembers}
+            theme={theme}
+          />
         )}
 
         {activeTab === 'content' && (
-          <ContentView content={content} setContent={setContent} theme={theme} />
+          <ContentView
+            content={content}
+            setContent={setContent}
+            theme={theme}
+          />
         )}
 
         {activeTab === 'versions' && (
-          <VersionsView versions={versions} setVersions={setVersions} theme={theme} />
+          <VersionsView
+            versions={versions}
+            setVersions={setVersions}
+            theme={theme}
+          />
         )}
       </main>
     </div>
