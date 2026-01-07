@@ -23,11 +23,12 @@ import {
   X,
   AlertTriangle,
   ArrowRight,
-  Trash2
+  Trash2,
+  LayoutGrid
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { supabase } from './supabaseClient';
-import { Task, Lead, Sale, Expense, ContentItem, Agent, TeamMember, Version } from './types';
+import { Task, Lead, Sale, Expense, ContentItem, Agent, TeamMember, Version, BatchProject } from './types';
 import { INITIAL_TEAM, INITIAL_AGENTS, DEFAULT_MONTHLY_TARGET } from './constants';
 
 import DashboardView from './views/DashboardView';
@@ -38,10 +39,12 @@ import ExpensesView from './views/ExpensesView';
 import ContentView from './views/ContentView';
 import CalendarView from './views/CalendarView';
 import VersionsView from './views/VersionsView';
+import BatchView from './views/BatchView';
 
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'sales', label: 'Sales Hub', icon: TrendingUp },
+  { id: 'batch', label: 'Batch/Live', icon: LayoutGrid },
   { id: 'expenses', label: 'Expenses', icon: Receipt },
   { id: 'calendar', label: 'Calendar', icon: Calendar },
   { id: 'tasks', label: 'Tasks', icon: CheckSquare },
@@ -76,6 +79,7 @@ const App: React.FC = () => {
   const [agents, setAgents] = useState<Agent[]>(INITIAL_AGENTS);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(INITIAL_TEAM);
   const [versions, setVersions] = useState<Version[]>([]);
+  const [batchProjects, setBatchProjects] = useState<BatchProject[]>([]);
 
   const initialLoadDone = useRef(false);
   const syncTimeoutRef = useRef<Record<string, number>>({});
@@ -85,7 +89,8 @@ const App: React.FC = () => {
     try {
       const [
         { data: t }, { data: l }, { data: s }, { data: e }, 
-        { data: c }, { data: a }, { data: tm }, { data: v }, { data: cfg }
+        { data: c }, { data: a }, { data: tm }, { data: v }, { data: cfg },
+        { data: bp }
       ] = await Promise.all([
         supabase.from('tasks').select('*'),
         supabase.from('leads').select('*'),
@@ -95,7 +100,8 @@ const App: React.FC = () => {
         supabase.from('agents').select('*'),
         supabase.from('team_members').select('*'),
         supabase.from('versions').select('*'),
-        supabase.from('app_config').select('*').eq('key', 'monthly_target').maybeSingle()
+        supabase.from('app_config').select('*').eq('key', 'monthly_target').maybeSingle(),
+        supabase.from('batch_projects').select('*')
       ]);
 
       if (t) setTasks(t.map((item: any) => item.data));
@@ -107,6 +113,7 @@ const App: React.FC = () => {
       if (tm && tm.length > 0) setTeamMembers(tm.map((item: any) => item.data));
       if (v) setVersions(v.map((item: any) => item.data));
       if (cfg && cfg.value !== undefined) setMonthlyTarget(cfg.value);
+      if (bp) setBatchProjects(bp.map((item: any) => item.data));
 
       const savedTheme = localStorage.getItem('lm_theme') as 'dark' | 'light';
       if (savedTheme) setTheme(savedTheme || 'dark');
@@ -164,6 +171,7 @@ const App: React.FC = () => {
   useEffect(() => { persist('agents', agents); }, [agents]);
   useEffect(() => { persist('team_members', teamMembers); }, [teamMembers]);
   useEffect(() => { persist('versions', versions); }, [versions]);
+  useEffect(() => { persist('batch_projects', batchProjects); }, [batchProjects]);
   useEffect(() => { persist('app_config', monthlyTarget as any, true); }, [monthlyTarget]);
 
   const confirmReset = () => {
@@ -172,6 +180,7 @@ const App: React.FC = () => {
     setTasks([]);
     setLeads([]);
     setContent([]);
+    setBatchProjects([]);
     setAgents(INITIAL_AGENTS);
     setTeamMembers(INITIAL_TEAM);
     setMonthlyTarget(DEFAULT_MONTHLY_TARGET);
@@ -193,6 +202,7 @@ const App: React.FC = () => {
         content: JSON.parse(JSON.stringify(content)),
         agents: JSON.parse(JSON.stringify(agents)),
         teamMembers: JSON.parse(JSON.stringify(teamMembers)),
+        batchProjects: JSON.parse(JSON.stringify(batchProjects)),
         monthlyTarget
       }
     };
@@ -212,6 +222,7 @@ const App: React.FC = () => {
     setContent(JSON.parse(JSON.stringify(v.data.content || [])));
     setAgents(JSON.parse(JSON.stringify(v.data.agents || INITIAL_AGENTS)));
     setTeamMembers(JSON.parse(JSON.stringify(v.data.teamMembers || INITIAL_TEAM)));
+    setBatchProjects(JSON.parse(JSON.stringify(v.data.batchProjects || [])));
     setMonthlyTarget(v.data.monthlyTarget || DEFAULT_MONTHLY_TARGET);
     
     setShowRestoreModal(false);
@@ -288,10 +299,20 @@ const App: React.FC = () => {
 
     const currentMonthSales = (sales || []).filter(s => new Date(s.createdAt) >= startOfMonth);
     const currentMonthExpenses = (expenses || []).filter(e => new Date(e.date) >= startOfMonth);
+    const currentMonthBatches = (batchProjects || []).filter(b => new Date(b.createdAt) >= startOfMonth);
     
-    const totalRevenue = currentMonthSales.reduce((acc, s) => acc + (s.amount || 0), 0);
+    // Batch Revenue is the sum of all "paid" amounts in current month batches
+    const batchRevenueTotal = currentMonthBatches.reduce((acc, b) => 
+      acc + b.students.reduce((sAcc, student) => sAcc + (Number(student.paid) || 0), 0), 0
+    );
+    const batchAdCostTotal = currentMonthBatches.reduce((acc, b) => 
+      acc + b.adCosts.reduce((cAcc, cost) => cAcc + (Number(cost.amount) || 0), 0), 0
+    );
+
+    const totalRevenue = currentMonthSales.reduce((acc, s) => acc + (s.amount || 0), 0) + batchRevenueTotal;
     const totalAdCost = currentMonthSales.reduce((acc, s) => acc + (s.adCost || 0), 0) + 
-                       currentMonthExpenses.filter(e => e.type === 'adcost').reduce((acc, e) => acc + (e.amount || 0), 0);
+                       currentMonthExpenses.filter(e => e.type === 'adcost').reduce((acc, e) => acc + (e.amount || 0), 0) +
+                       batchAdCostTotal;
     
     const operationalCosts = currentMonthExpenses.filter(e => e.type !== 'adcost').reduce((acc, e) => acc + (e.amount || 0), 0);
     const netProfit = totalRevenue - totalAdCost - operationalCosts;
@@ -301,9 +322,15 @@ const App: React.FC = () => {
     const dailyRequired = targetLeft / remainingDays;
 
     const todaySales = (sales || []).filter(s => s.createdAt.startsWith(todayStr));
-    const todayRevenue = todaySales.reduce((acc, s) => acc + (s.amount || 0), 0);
+    const todayBatches = (batchProjects || []).filter(b => b.createdAt.startsWith(todayStr));
+    
+    const todayRevenue = todaySales.reduce((acc, s) => acc + (s.amount || 0), 0) + 
+                        todayBatches.reduce((acc, b) => acc + b.students.reduce((sAcc, st) => sAcc + (Number(st.paid) || 0), 0), 0);
+    
     const todayAdCost = todaySales.reduce((acc, s) => acc + (s.adCost || 0), 0) + 
-                       (expenses || []).filter(e => e.date === todayStr && e.type === 'adcost').reduce((acc, e) => acc + (e.amount || 0), 0);
+                       (expenses || []).filter(e => e.date === todayStr && e.type === 'adcost').reduce((acc, e) => acc + (e.amount || 0), 0) +
+                       todayBatches.reduce((acc, b) => acc + b.adCosts.reduce((cAcc, co) => cAcc + (Number(co.amount) || 0), 0), 0);
+    
     const todayNetProfit = todayRevenue - todayAdCost - (expenses || []).filter(e => e.date === todayStr && e.type !== 'adcost').reduce((acc, e) => acc + (e.amount || 0), 0);
 
     const dailyBreakdown = [];
@@ -312,38 +339,87 @@ const App: React.FC = () => {
       const dateStr = date.toISOString().split('T')[0];
       const daySales = (sales || []).filter(s => s.createdAt.startsWith(dateStr));
       const dayExpenses = (expenses || []).filter(e => e.date === dateStr);
+      const dayBatches = (batchProjects || []).filter(b => b.createdAt.startsWith(dateStr));
+
       const revCall = daySales.filter(s => s.type === 'call').reduce((acc, s) => acc + (s.amount || 0), 0);
       const adsCall = daySales.filter(s => s.type === 'call').reduce((acc, s) => acc + (s.adCost || 0), 0);
       const revWeb = daySales.filter(s => s.type === 'website').reduce((acc, s) => acc + (s.amount || 0), 0);
       const adsWeb = daySales.filter(s => s.type === 'website').reduce((acc, s) => acc + (s.adCost || 0), 0);
+      
+      const revBatch = dayBatches.reduce((acc, b) => acc + b.students.reduce((sAcc, st) => sAcc + (Number(st.paid) || 0), 0), 0);
+      const adsBatch = dayBatches.reduce((acc, b) => acc + b.adCosts.reduce((cAcc, co) => cAcc + (Number(co.amount) || 0), 0), 0);
+
       const directAdCosts = dayExpenses.filter(e => e.type === 'adcost').reduce((acc, e) => acc + (e.amount || 0), 0);
       const operationalExp = dayExpenses.reduce((acc, e) => acc + (e.amount || 0), 0);
-      const dayTotalAds = adsCall + adsWeb + directAdCosts;
-      const dayTotalRev = revCall + revWeb;
-      const dayTotalExpAll = operationalExp + adsCall + adsWeb;
+      
+      const dayTotalAds = adsCall + adsWeb + adsBatch + directAdCosts;
+      const dayTotalRev = revCall + revWeb + revBatch;
+      const dayTotalExpAll = operationalExp + adsCall + adsWeb + adsBatch;
       const dayNetProfit = dayTotalRev - dayTotalExpAll;
+      
       if (dayTotalRev > 0 || dayTotalAds > 0 || dayTotalExpAll > 0) {
-        dailyBreakdown.push({ date: dateStr, day: i, expenses: dayTotalExpAll, adsCall, revCall, adsWeb, revWeb, totalAds: dayTotalAds, totalRev: dayTotalRev, netProfit: dayNetProfit });
+        dailyBreakdown.push({ date: dateStr, day: i, expenses: dayTotalExpAll, adsCall, revCall, adsWeb, revWeb, adsBatch, revBatch, totalAds: dayTotalAds, totalRev: dayTotalRev, netProfit: dayNetProfit });
       }
     }
+
+    // Individual Agent Leaderboard with Daily Breakdowns
+    const agentLeaderboard = (agents || []).map(agent => {
+      const agentSales = currentMonthSales.filter(s => s.agentId === agent.id);
+      
+      // Also attribute batch student "paid" revenue if advisor matches agent name
+      const agentBatchRevenue = (batchProjects || []).reduce((acc, b) => 
+        acc + b.students.filter(s => s.advisor === agent.name).reduce((sAcc, st) => sAcc + (Number(st.paid) || 0), 0), 0
+      );
+
+      const rev = agentSales.reduce((acc, s) => acc + (s.amount || 0), 0) + agentBatchRevenue;
+      const cost = agentSales.reduce((acc, s) => acc + (s.adCost || 0), 0);
+      
+      // Calculate daily stats for the specific agent
+      const agentDaily = [];
+      const agentActiveDates = Array.from(new Set([
+        ...agentSales.map(s => s.createdAt.split('T')[0]),
+        ...(batchProjects || []).filter(b => b.students.some(s => s.advisor === agent.name)).map(b => b.createdAt.split('T')[0])
+      ]));
+
+      for (const dStr of agentActiveDates) {
+        const dSales = agentSales.filter(s => s.createdAt.startsWith(dStr));
+        const dBatchRev = (batchProjects || []).filter(b => b.createdAt.startsWith(dStr)).reduce((acc, b) => 
+          acc + b.students.filter(s => s.advisor === agent.name).reduce((sAcc, st) => sAcc + (Number(st.paid) || 0), 0), 0
+        );
+        const dRev = dSales.reduce((acc, s) => acc + (s.amount || 0), 0) + dBatchRev;
+        const dCost = dSales.reduce((acc, s) => acc + (s.adCost || 0), 0);
+        agentDaily.push({
+          date: dStr,
+          revenue: dRev,
+          adBurn: dCost,
+          profit: dRev - dCost
+        });
+      }
+
+      return { 
+        ...agent, 
+        revenue: rev, 
+        adCost: cost, 
+        profit: rev - cost,
+        roi: cost > 0 ? (rev / cost) : 0, 
+        count: agentSales.length,
+        dailyBreakdown: agentDaily.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      };
+    }).sort((a, b) => b.revenue - a.revenue);
 
     return {
       totalRevenue, totalAdCost, netProfit, roi, targetLeft, dailyRequired,
       remainingDays, todayRevenue, todayAdCost, todayNetProfit,
       todayCount: todaySales.length,
       dailyBreakdown: dailyBreakdown.reverse(),
-      agentLeaderboard: (agents || []).map(agent => {
-        const agentSales = currentMonthSales.filter(s => s.agentId === agent.id);
-        const rev = agentSales.reduce((acc, s) => acc + (s.amount || 0), 0);
-        const cost = agentSales.reduce((acc, s) => acc + (s.adCost || 0), 0);
-        return { ...agent, revenue: rev, adCost: cost, roi: cost > 0 ? (rev / cost) : 0, count: agentSales.length };
-      }).sort((a, b) => b.revenue - a.revenue),
+      agentLeaderboard,
       callRevenue: currentMonthSales.filter(s => s.type === 'call').reduce((acc, s) => acc + (s.amount || 0), 0),
       websiteRevenue: currentMonthSales.filter(s => s.type === 'website').reduce((acc, s) => acc + (s.amount || 0), 0),
+      batchRevenue: batchRevenueTotal,
       dhakaTime: dhakaNow.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit' }),
       dhakaDate: dhakaNow.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
     };
-  }, [sales, expenses, monthlyTarget, agents]);
+  }, [sales, expenses, monthlyTarget, agents, batchProjects]);
 
   if (isLoading) {
     return (
@@ -399,8 +475,9 @@ const App: React.FC = () => {
         </header>
 
         <div className="flex-1 overflow-y-auto p-8">
-          {activeTab === 'dashboard' && <DashboardView stats={stats} monthlyTarget={monthlyTarget} onTargetChange={setMonthlyTarget} theme={theme} setSales={setSales} sales={sales} onReset={() => setShowResetModal(true)} onExport={() => exportToExcel(stats.dailyBreakdown)} onBackup={() => { setBackupName(`Snapshot ${new Date().toLocaleDateString()}`); setShowBackupModal(true); }} />}
+          {activeTab === 'dashboard' && <DashboardView stats={stats} monthlyTarget={monthlyTarget} onTargetChange={setMonthlyTarget} theme={theme} setSales={setSales} sales={sales} batchProjects={batchProjects} onReset={() => setShowResetModal(true)} onExport={() => exportToExcel(stats.dailyBreakdown)} onBackup={() => { setBackupName(`Snapshot ${new Date().toLocaleDateString()}`); setShowBackupModal(true); }} />}
           {activeTab === 'sales' && <SalesView leads={leads} setLeads={setLeads} sales={sales} setSales={setSales} agents={agents} setAgents={setAgents} theme={theme} />}
+          {activeTab === 'batch' && <BatchView batchProjects={batchProjects} setBatchProjects={setBatchProjects} agents={agents} theme={theme} />}
           {activeTab === 'expenses' && <ExpensesView expenses={expenses} setExpenses={setExpenses} agents={agents} theme={theme} />}
           {activeTab === 'calendar' && <CalendarView tasks={tasks} sales={sales} expenses={expenses} theme={theme} teamMembers={teamMembers} agents={agents} />}
           {activeTab === 'tasks' && <TasksView tasks={tasks} setTasks={setTasks} teamMembers={teamMembers} theme={theme} />}

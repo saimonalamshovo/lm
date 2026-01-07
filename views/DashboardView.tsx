@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Target as TargetIcon,
   Crown,
@@ -23,9 +22,17 @@ import {
   Download,
   RotateCcw,
   ShieldAlert,
-  Save
+  Save,
+  Users,
+  ChevronDown,
+  ChevronUp,
+  FileText,
+  Filter,
+  LayoutGrid,
+  Monitor,
+  Check
 } from 'lucide-react';
-import { Sale } from '../types';
+import { Sale, BatchProject } from '../types';
 
 const InsightCard: React.FC<{ label: string; value: string | number; icon: any; color: string; theme: 'dark' | 'light'; desc: string }> = ({ label, value, icon: Icon, color, theme, desc }) => {
   const colors: any = {
@@ -53,22 +60,67 @@ interface DashboardViewProps {
   theme: 'dark' | 'light';
   setSales: React.Dispatch<React.SetStateAction<Sale[]>>;
   sales: Sale[];
+  batchProjects: BatchProject[];
   onReset: () => void;
   onExport: () => void;
   onBackup: () => void;
 }
 
-const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onTargetChange, theme, setSales, sales, onReset, onExport, onBackup }) => {
+const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onTargetChange, theme, setSales, sales, batchProjects, onReset, onExport, onBackup }) => {
   const [showTargetModal, setShowTargetModal] = useState(false);
   const [showQuickWebModal, setShowQuickWebModal] = useState(false);
   const [tempTarget, setTempTarget] = useState(monthlyTarget.toString());
   const [webAmount, setWebAmount] = useState('');
   const [webDate, setWebDate] = useState(new Date().toISOString().split('T')[0]);
+  
+  const [expandedAgentId, setExpandedAgentId] = useState<string | null>(null);
+  
+  // Filtering states
+  const [selectedSources, setSelectedSources] = useState<string[]>(['website', 'call', 'batch']);
 
   useEffect(() => { setTempTarget(monthlyTarget.toString()); }, [monthlyTarget]);
 
-  const progressPercent = monthlyTarget > 0 ? Math.min(100, ((stats?.totalRevenue || 0) / monthlyTarget * 100)) : 0;
-  
+  const toggleSource = (source: string) => {
+    setSelectedSources(prev => 
+      prev.includes(source) 
+        ? (prev.length > 1 ? prev.filter(s => s !== source) : prev) 
+        : [...prev, source]
+    );
+  };
+
+  const filteredStats = useMemo(() => {
+    if (!stats) return stats;
+
+    const showWeb = selectedSources.includes('website');
+    const showCall = selectedSources.includes('call');
+    const showBatch = selectedSources.includes('batch');
+
+    // Re-calculating primary totals based on filters
+    const filteredTotalRevenue = (showWeb ? stats.websiteRevenue : 0) + 
+                                (showCall ? stats.callRevenue : 0) + 
+                                (showBatch ? (stats.batchRevenue || 0) : 0);
+    
+    // We assume ad costs follow the source
+    // In App.tsx dailyBreakdown has adsCall, adsWeb, adsBatch
+    const filteredTotalAdCost = (showWeb ? stats.dailyBreakdown.reduce((a: any, d: any) => a + d.adsWeb, 0) : 0) +
+                                (showCall ? stats.dailyBreakdown.reduce((a: any, d: any) => a + d.adsCall, 0) : 0) +
+                                (showBatch ? stats.dailyBreakdown.reduce((a: any, d: any) => a + (d.adsBatch || 0), 0) : 0);
+
+    const filteredNetProfit = filteredTotalRevenue - filteredTotalAdCost;
+    const filteredRoi = filteredTotalAdCost > 0 ? (filteredTotalRevenue / filteredTotalAdCost) : 0;
+    const filteredProgress = monthlyTarget > 0 ? Math.min(100, (filteredTotalRevenue / monthlyTarget * 100)) : 0;
+
+    return {
+      ...stats,
+      totalRevenue: filteredTotalRevenue,
+      totalAdCost: filteredTotalAdCost,
+      netProfit: filteredNetProfit,
+      roi: filteredRoi,
+      progressPercent: filteredProgress,
+      targetLeft: Math.max(0, monthlyTarget - filteredTotalRevenue)
+    };
+  }, [stats, selectedSources, monthlyTarget]);
+
   const handleSaveTarget = () => {
     const num = parseInt(tempTarget.replace(/[^0-9]/g, ''));
     if (!isNaN(num)) { onTargetChange(num); setShowTargetModal(false); }
@@ -87,48 +139,11 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
   const formatNum = (num: number) => (num || 0).toLocaleString();
   const cardBg = theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-200 shadow-sm';
   const textColor = theme === 'dark' ? 'text-white' : 'text-gray-900';
+  const inputBg = theme === 'dark' ? 'bg-slate-950' : 'bg-gray-100';
 
   return (
     <div className="space-y-10 animate-in fade-in duration-500 pb-12">
       
-      {/* 🚀 MASTER COMMAND CENTER - EXPORT & RESET HERE */}
-      <section className={`${cardBg} p-8 rounded-[2.5rem] border-2 border-slate-800 flex flex-col md:flex-row items-center justify-between gap-8 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 shadow-2xl overflow-hidden relative`}>
-         <div className="absolute inset-0 bg-blue-500/5 pointer-events-none" />
-         <div className="flex items-center gap-6 relative z-10">
-            <div className="w-16 h-16 bg-blue-600 rounded-3xl flex items-center justify-center shadow-2xl shadow-blue-900/40 border border-blue-400/20">
-               <ShieldCheck className="w-8 h-8 text-white" />
-            </div>
-            <div>
-               <h2 className="text-2xl font-black text-white uppercase tracking-tighter italic">Master Command Center</h2>
-               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Data Governance & Export Hub</p>
-            </div>
-         </div>
-
-         <div className="flex flex-wrap gap-4 relative z-10">
-            <button 
-              onClick={onExport}
-              className="px-10 py-5 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-3xl shadow-xl shadow-blue-900/40 flex items-center gap-3 transition-all hover:scale-105 active:scale-95 uppercase text-xs tracking-widest"
-            >
-               <Download className="w-5 h-5" />
-               Download XLSX Ledger
-            </button>
-            <button 
-              onClick={onBackup}
-              className="px-8 py-5 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-3xl shadow-xl shadow-emerald-900/40 flex items-center gap-3 transition-all hover:scale-105 active:scale-95 uppercase text-xs tracking-widest"
-            >
-               <Save className="w-5 h-5" />
-               Save Backup
-            </button>
-            <button 
-              onClick={onReset}
-              className="px-8 py-5 bg-slate-800 hover:bg-red-600 text-white font-black rounded-3xl shadow-xl border border-slate-700 hover:border-red-400/40 flex items-center gap-3 transition-all hover:scale-105 active:scale-95 uppercase text-xs tracking-widest"
-            >
-               <RotateCcw className="w-5 h-5" />
-               System Wipe
-            </button>
-         </div>
-      </section>
-
       {/* TARGET TRACKER SECTION */}
       <section className={`${cardBg} border-2 border-red-600/20 rounded-[2.5rem] p-10 shadow-2xl relative overflow-hidden`}>
          <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none">
@@ -149,19 +164,19 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
                   <div>
                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Distance to Target</p>
-                     <p className="text-5xl font-black text-red-600 tabular-nums tracking-tighter">৳{formatNum(stats?.targetLeft)}</p>
+                     <p className="text-5xl font-black text-red-600 tabular-nums tracking-tighter">৳{formatNum(filteredStats?.targetLeft)}</p>
                      <p className="text-[10px] text-slate-500 font-bold mt-2 uppercase">REMAINING GAP</p>
                   </div>
                   <div>
                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Daily Quota Required</p>
-                     <p className="text-5xl font-black text-yellow-500 tabular-nums tracking-tighter">৳{formatNum(Math.round(stats?.dailyRequired || 0))}</p>
-                     <p className="text-[10px] text-slate-500 font-bold mt-2 uppercase">FOR {stats?.remainingDays || 0} MORE DAYS</p>
+                     <p className="text-5xl font-black text-yellow-500 tabular-nums tracking-tighter">৳{formatNum(Math.round(filteredStats?.dailyRequired || 0))}</p>
+                     <p className="text-[10px] text-slate-500 font-bold mt-2 uppercase">FOR {filteredStats?.remainingDays || 0} MORE DAYS</p>
                   </div>
                   <div className="bg-slate-800/20 p-6 rounded-3xl border border-slate-700/30 flex flex-col justify-center">
                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 text-center">Velocity Score</p>
-                     <p className="text-3xl font-black text-green-500 text-center">{progressPercent.toFixed(1)}%</p>
+                     <p className="text-3xl font-black text-green-500 text-center">{filteredStats?.progressPercent.toFixed(1)}%</p>
                      <div className="h-2 w-full bg-slate-800 rounded-full mt-3 overflow-hidden">
-                        <div className="h-full bg-green-500 transition-all duration-1000" style={{ width: `${progressPercent}%` }} />
+                        <div className="h-full bg-green-500 transition-all duration-1000" style={{ width: `${filteredStats?.progressPercent}%` }} />
                      </div>
                   </div>
                </div>
@@ -176,6 +191,38 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
                   <Plus className="w-4 h-4" /> Quick Web Sale
                </button>
             </div>
+         </div>
+      </section>
+
+      {/* 🧭 SOURCE FILTER BAR */}
+      <section className={`${cardBg} border-2 border-slate-800/20 rounded-[2rem] p-6 shadow-xl flex flex-wrap items-center gap-6`}>
+         <div className="flex items-center gap-3 pr-6 border-r border-slate-800/20">
+            <Filter className="w-5 h-5 text-blue-500" />
+            <h3 className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Revenue Intelligence Filter</h3>
+         </div>
+         <div className="flex flex-wrap gap-3">
+            {[
+              { id: 'website', label: 'Web Recorded Sales', icon: Monitor, color: 'text-orange-500', bg: 'bg-orange-500/10' },
+              { id: 'call', label: 'Call Center Operations', icon: PhoneCall, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+              { id: 'batch', label: 'Offline / Live Batch', icon: LayoutGrid, color: 'text-purple-500', bg: 'bg-purple-500/10' }
+            ].map((source) => {
+              const isActive = selectedSources.includes(source.id);
+              return (
+                <button
+                  key={source.id}
+                  onClick={() => toggleSource(source.id)}
+                  className={`flex items-center gap-3 px-6 py-3 rounded-2xl border-2 transition-all ${
+                    isActive 
+                      ? `border-blue-600 bg-blue-600 text-white shadow-lg` 
+                      : `border-slate-800/30 ${theme === 'dark' ? 'bg-slate-950/40' : 'bg-gray-50'} text-slate-500 hover:border-slate-600`
+                  }`}
+                >
+                  <source.icon className={`w-4 h-4 ${isActive ? 'text-white' : source.color}`} />
+                  <span className="text-[10px] font-black uppercase tracking-widest">{source.label}</span>
+                  {isActive && <Check className="w-3 h-3 ml-1" />}
+                </button>
+              );
+            })}
          </div>
       </section>
 
@@ -196,19 +243,19 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
             <div className="flex-1 grid grid-cols-2 lg:grid-cols-4 gap-6 w-full">
                <div className="flex flex-col items-center lg:items-start">
                   <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1"><Zap className="w-2 h-2 text-yellow-500" /> Revenue</span>
-                  <p className={`text-2xl font-black ${textColor} tabular-nums`}>৳{formatNum(stats?.todayRevenue)}</p>
+                  <p className={`text-2xl font-black ${textColor} tabular-nums`}>৳{formatNum(filteredStats?.todayRevenue)}</p>
                </div>
                <div className="flex flex-col items-center lg:items-start">
                   <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1"><Flame className="w-2 h-2 text-red-500" /> Ad Burn</span>
-                  <p className="text-2xl font-black text-red-500 tabular-nums">৳{formatNum(stats?.todayAdCost)}</p>
+                  <p className="text-2xl font-black text-red-500 tabular-nums">৳{formatNum(filteredStats?.todayAdCost)}</p>
                </div>
                <div className="flex flex-col items-center lg:items-start">
                   <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1"><BarChart3 className="w-2 h-2 text-green-500" /> Net Profit</span>
-                  <p className="text-2xl font-black text-green-500 tabular-nums">৳{formatNum(stats?.todayNetProfit)}</p>
+                  <p className="text-2xl font-black text-green-500 tabular-nums">৳{formatNum(filteredStats?.todayNetProfit)}</p>
                </div>
                <div className="flex flex-col items-center lg:items-start">
                   <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1"><History className="w-2 h-2 text-blue-500" /> Ops Count</span>
-                  <p className="text-2xl font-black text-blue-500 tabular-nums">{stats?.todayCount || 0} Sales</p>
+                  <p className="text-2xl font-black text-blue-500 tabular-nums">{filteredStats?.todayCount || 0} Sales</p>
                </div>
             </div>
          </div>
@@ -216,10 +263,136 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
 
       {/* CORE FINANCIAL METRICS */}
       <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-         <InsightCard label="Global ROI" value={`${(stats?.roi || 0).toFixed(2)}x`} icon={Rocket} color="green" theme={theme} desc={`Yield on Market Spend`} />
-         <InsightCard label="Gross Revenue" value={`৳${formatNum(stats?.totalRevenue)}`} icon={Coins} color="blue" theme={theme} desc="Total cash inflow" />
-         <InsightCard label="Market Spend" value={`৳${formatNum(stats?.totalAdCost)}`} icon={Flame} color="red" theme={theme} desc="Total monthly ad burn" />
-         <InsightCard label="Monthly Profit" value={`৳${formatNum(stats?.netProfit)}`} icon={BarChart3} color="orange" theme={theme} desc="Final after ads & ops" />
+         <InsightCard label="Global ROI" value={`${(filteredStats?.roi || 0).toFixed(2)}x`} icon={Rocket} color="green" theme={theme} desc={`Yield on Market Spend`} />
+         <InsightCard label="Gross Revenue" value={`৳${formatNum(filteredStats?.totalRevenue)}`} icon={Coins} color="blue" theme={theme} desc="Filtered monthly inflow" />
+         <InsightCard label="Market Spend" value={`৳${formatNum(filteredStats?.totalAdCost)}`} icon={Flame} color="red" theme={theme} desc="Filtered ad burn" />
+         <InsightCard label="Monthly Profit" value={`৳${formatNum(filteredStats?.netProfit)}`} icon={BarChart3} color="orange" theme={theme} desc="Net profit from sources" />
+      </section>
+
+      {/* 🏆 SALES FORCE LEADERBOARD - RESTORED & ENHANCED */}
+      <section className={`${cardBg} border-2 border-slate-800/10 rounded-[2.5rem] p-10 shadow-2xl`}>
+         <div className="flex items-center justify-between mb-10 pb-6 border-b border-slate-800/20">
+            <div>
+               <h3 className={`text-xl font-bold ${textColor} flex items-center gap-3 uppercase tracking-tight`}>
+                  <Trophy className="w-6 h-6 text-yellow-500" />
+                  Top Performers: Sales Force
+               </h3>
+               <p className="text-[10px] font-bold text-slate-500 mt-1 uppercase tracking-widest">Individual Agent Intelligence & Yields</p>
+            </div>
+            <div className="flex items-center gap-2">
+               <span className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
+               <span className="text-[10px] font-black text-green-500 uppercase">Live Efficiency Ranking</span>
+            </div>
+         </div>
+
+         <div className="grid grid-cols-1 gap-6">
+            {(filteredStats?.agentLeaderboard || []).map((agent: any, index: number) => {
+               const isExpanded = expandedAgentId === agent.id;
+               const rankIcon = index === 0 ? <Crown className="w-5 h-5 text-yellow-500" /> : null;
+               
+               return (
+                  <div key={agent.id} className={`${theme === 'dark' ? 'bg-slate-950/50' : 'bg-gray-50'} rounded-[2rem] border-2 border-slate-800/10 hover:border-red-500/30 transition-all overflow-hidden`}>
+                     <div 
+                        className="p-8 flex flex-col xl:flex-row items-center justify-between gap-8 cursor-pointer group"
+                        onClick={() => setExpandedAgentId(isExpanded ? null : agent.id)}
+                     >
+                        <div className="flex items-center gap-6">
+                           <div className="relative">
+                              <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl shadow-lg border-2" style={{ backgroundColor: `${agent.color}15`, borderColor: agent.color }}>
+                                 {agent.avatar}
+                              </div>
+                              <div className="absolute -top-3 -left-3 w-8 h-8 rounded-full bg-slate-900 border-2 border-slate-700 flex items-center justify-center text-xs font-black text-white shadow-lg">
+                                 #{index + 1}
+                              </div>
+                           </div>
+                           <div>
+                              <div className="flex items-center gap-2">
+                                 <h4 className={`text-xl font-black uppercase italic ${textColor} group-hover:text-red-500 transition-colors`}>{agent.name}</h4>
+                                 {rankIcon}
+                              </div>
+                              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Sales Specialist | {agent.count} Deals</p>
+                           </div>
+                        </div>
+
+                        <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-8 w-full">
+                           <div className="text-center xl:text-left">
+                              <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Total Revenue</p>
+                              <p className={`text-lg font-black ${textColor} tabular-nums`}>৳{formatNum(agent.revenue)}</p>
+                           </div>
+                           <div className="text-center xl:text-left">
+                              <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Total Ad Burn</p>
+                              <p className="text-lg font-black text-red-500 tabular-nums">৳{formatNum(agent.adCost)}</p>
+                           </div>
+                           <div className="text-center xl:text-left">
+                              <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Net Profit</p>
+                              <p className={`text-lg font-black tabular-nums ${agent.profit >= 0 ? 'text-green-500' : 'text-red-600'}`}>
+                                 {agent.profit < 0 ? '-' : ''}৳{formatNum(Math.abs(agent.profit))}
+                              </p>
+                           </div>
+                           <div className="text-center xl:text-left">
+                              <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Target ROI</p>
+                              <p className={`text-lg font-black text-blue-500 tabular-nums`}>{agent.roi.toFixed(2)}x</p>
+                           </div>
+                        </div>
+
+                        <div className="flex items-center gap-4">
+                           <button className={`p-4 rounded-xl ${theme === 'dark' ? 'bg-slate-800' : 'bg-gray-200'} text-slate-400 group-hover:text-white group-hover:bg-red-600 transition-all shadow-md`}>
+                              {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                           </button>
+                        </div>
+                     </div>
+
+                     {/* 📊 INDIVIDUAL AGENT DAILY REPORT LEDGER - TOGGLEABLE */}
+                     {isExpanded && (
+                        <div className="border-t border-slate-800/20 bg-slate-900/40 p-10 animate-in slide-in-from-top-4 duration-300">
+                           <div className="flex items-center gap-3 mb-8">
+                              <FileText className="w-5 h-5 text-red-500" />
+                              <h5 className="text-[11px] font-black text-white uppercase tracking-[0.2em]">Individual Daily Ops Intel</h5>
+                           </div>
+                           
+                           <div className="overflow-x-auto custom-scrollbar">
+                              <table className="w-full text-left">
+                                 <thead>
+                                    <tr className="border-b border-slate-800/30">
+                                       <th className="px-6 py-4 text-[9px] font-black text-slate-500 uppercase tracking-widest">Execution Date</th>
+                                       <th className="px-6 py-4 text-[9px] font-black text-slate-500 uppercase tracking-widest text-right">Ad Burn (৳)</th>
+                                       <th className="px-6 py-4 text-[9px] font-black text-slate-500 uppercase tracking-widest text-right">Revenue (৳)</th>
+                                       <th className="px-6 py-4 text-[9px] font-black text-slate-500 uppercase tracking-widest text-right">Day Profit (৳)</th>
+                                    </tr>
+                                 </thead>
+                                 <tbody className="divide-y divide-slate-800/20">
+                                    {(agent.dailyBreakdown || []).length === 0 ? (
+                                       <tr><td colSpan={4} className="px-6 py-12 text-center text-xs opacity-30 font-bold uppercase italic">No daily operation records found for this period</td></tr>
+                                    ) : agent.dailyBreakdown.map((day: any) => (
+                                       <tr key={day.date} className="hover:bg-slate-800/30 transition-colors group/row">
+                                          <td className="px-6 py-4 text-xs font-black text-slate-300 uppercase italic">
+                                             {new Date(day.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                                          </td>
+                                          <td className="px-6 py-4 text-right font-bold text-red-500 text-xs">৳{formatNum(day.adBurn)}</td>
+                                          <td className="px-6 py-4 text-right font-bold text-green-500 text-xs">৳{formatNum(day.revenue)}</td>
+                                          <td className={`px-6 py-4 text-right font-black text-sm tabular-nums ${day.profit >= 0 ? 'text-green-400' : 'text-red-600'}`}>
+                                             {day.profit < 0 ? '-' : ''}৳{formatNum(Math.abs(day.profit))}
+                                          </td>
+                                       </tr>
+                                    ))}
+                                 </tbody>
+                              </table>
+                           </div>
+
+                           <div className="mt-8 flex justify-end">
+                              <div className="px-6 py-4 bg-slate-800/50 rounded-2xl border border-slate-700/50">
+                                 <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 text-right">Cumulative Monthly Profit</p>
+                                 <p className={`text-xl font-black text-right ${agent.profit >= 0 ? 'text-green-500' : 'text-red-600'}`}>
+                                    {agent.profit < 0 ? '-' : ''}৳{formatNum(Math.abs(agent.profit))}
+                                 </p>
+                              </div>
+                           </div>
+                        </div>
+                     )}
+                  </div>
+               );
+            })}
+         </div>
       </section>
 
       {/* MONTHLY DAILY SUMMARY LEDGER */}
@@ -244,13 +417,24 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
                      <th className="px-6 py-5 text-[9px] font-black text-blue-500 uppercase tracking-widest text-right bg-blue-500/5">Rev (Call)</th>
                      <th className="px-6 py-5 text-[9px] font-black text-orange-500 uppercase tracking-widest text-right bg-orange-500/5">Ads (Web)</th>
                      <th className="px-6 py-5 text-[9px] font-black text-orange-500 uppercase tracking-widest text-right bg-orange-500/5">Rev (Web)</th>
+                     <th className="px-6 py-5 text-[9px] font-black text-purple-500 uppercase tracking-widest text-right bg-purple-500/5">Rev (Batch)</th>
                      <th className="px-6 py-5 text-[9px] font-black text-red-500 uppercase tracking-widest text-right">Total Ad Burn</th>
                      <th className="px-6 py-5 text-[9px] font-black text-green-500 uppercase tracking-widest text-right">Total Rev</th>
                      <th className="px-6 py-5 text-[9px] font-black text-white uppercase tracking-widest text-right bg-slate-800 shadow-inner">Net Profit</th>
                   </tr>
                </thead>
                <tbody className={`divide-y ${theme === 'dark' ? 'divide-slate-800/50' : 'divide-gray-100'}`}>
-                  {(stats?.dailyBreakdown || []).map((day: any) => (
+                  {(filteredStats?.dailyBreakdown || []).map((day: any) => {
+                     // Check filters for the table as well
+                     const showWeb = selectedSources.includes('website');
+                     const showCall = selectedSources.includes('call');
+                     const showBatch = selectedSources.includes('batch');
+
+                     const displayRev = (showWeb ? day.revWeb : 0) + (showCall ? day.revCall : 0) + (showBatch ? (day.revBatch || 0) : 0);
+                     const displayAds = (showWeb ? day.adsWeb : 0) + (showCall ? day.adsCall : 0) + (showBatch ? (day.adsBatch || 0) : 0);
+                     const displayProfit = displayRev - displayAds - day.expenses;
+
+                     return (
                         <tr key={day.date} className="hover:bg-red-500/5 transition-colors group">
                            <td className="px-6 py-5 sticky left-0 z-10 bg-inherit border-r border-slate-800/10">
                               <p className={`text-xs font-black ${textColor}`}>{new Date(day.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</p>
@@ -260,13 +444,15 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
                            <td className="px-6 py-5 text-right font-black text-xs text-blue-500 bg-blue-500/5">৳{formatNum(day.revCall)}</td>
                            <td className="px-6 py-5 text-right font-black text-xs text-orange-400 bg-orange-500/5">৳{formatNum(day.adsWeb)}</td>
                            <td className="px-6 py-5 text-right font-black text-xs text-orange-500 bg-orange-500/5">৳{formatNum(day.revWeb)}</td>
-                           <td className="px-6 py-5 text-right font-black text-xs text-red-500">৳{formatNum(day.totalAds)}</td>
-                           <td className="px-6 py-5 text-right font-black text-xs text-green-500">৳{formatNum(day.totalRev)}</td>
-                           <td className={`px-6 py-5 text-right font-black text-sm tabular-nums shadow-inner ${day.netProfit < 0 ? 'bg-red-900/10 text-red-500' : 'bg-green-900/10 text-green-500'}`}>
-                              {day.netProfit < 0 ? '-' : ''}৳{formatNum(Math.abs(day.netProfit))}
+                           <td className="px-6 py-5 text-right font-black text-xs text-purple-500 bg-purple-500/5">৳{formatNum(day.revBatch)}</td>
+                           <td className="px-6 py-5 text-right font-black text-xs text-red-500">৳{formatNum(displayAds)}</td>
+                           <td className="px-6 py-5 text-right font-black text-xs text-green-500">৳{formatNum(displayRev)}</td>
+                           <td className={`px-6 py-5 text-right font-black text-sm tabular-nums shadow-inner ${displayProfit < 0 ? 'bg-red-900/10 text-red-500' : 'bg-green-900/10 text-green-500'}`}>
+                              {displayProfit < 0 ? '-' : ''}৳{formatNum(Math.abs(displayProfit))}
                            </td>
                         </tr>
-                  ))}
+                     );
+                  })}
                </tbody>
             </table>
          </div>

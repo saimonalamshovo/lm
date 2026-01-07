@@ -78,6 +78,34 @@ export interface Agent {
   color: string;
 }
 
+export interface Student {
+  id: string;
+  name: string;
+  number: string;
+  email: string;
+  paid: number;
+  due: number;
+  access: boolean;
+  advisor: string;
+}
+
+export interface BatchAdCost {
+  id: string;
+  amount: number;
+  date: string;
+  description: string;
+}
+
+export interface BatchProject {
+  id: string;
+  courseName: string;
+  landingPage: string;
+  startDate: string;
+  students: Student[];
+  adCosts: BatchAdCost[];
+  createdAt: string;
+}
+
 export interface Version {
   id: string;
   name: string;
@@ -91,5 +119,6 @@ export interface Version {
     agents: Agent[];
     teamMembers: TeamMember[];
     monthlyTarget: number;
+    batchProjects: BatchProject[];
   };
 }
