@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { UserPlus, Plus, TrendingUp, DollarSign, Trash2, Edit3, Save, X, BarChart3, Globe, PhoneCall, Calendar, Search, ArrowRightCircle, ShieldAlert, Users } from 'lucide-react';
+import { UserPlus, Plus, TrendingUp, DollarSign, Trash2, Edit3, Save, X, BarChart3, Globe, PhoneCall, Calendar, Search, ArrowRightCircle, ShieldAlert, Users, Wallet, MessageSquare } from 'lucide-react';
 import { Lead, Sale, Agent } from '../types';
 
 interface SalesViewProps {
@@ -32,8 +32,9 @@ const SalesView: React.FC<SalesViewProps> = ({ leads, setLeads, sales, setSales,
     amount: '',
     adCost: '',
     date: new Date().toISOString().split('T')[0],
-    type: 'website' as 'website' | 'call',
-    agentId: ''
+    type: 'website' as 'website' | 'call' | 'hand_cash',
+    agentId: '',
+    comment: ''
   });
 
   const saveSale = (e: React.FormEvent) => {
@@ -43,13 +44,14 @@ const SalesView: React.FC<SalesViewProps> = ({ leads, setLeads, sales, setSales,
     
     if (amount > 0) {
       if (editId) {
-        setSales(sales.map(s => s.id === editId ? { 
+        setSales(prev => prev.map(s => s.id === editId ? { 
           ...s, 
           amount, 
           adCost, 
+          comment: saleFormData.comment,
           createdAt: saleFormData.date + "T12:00:00Z",
           type: saleFormData.type,
-          agentId: saleFormData.type === 'call' ? saleFormData.agentId : undefined
+          agentId: (saleFormData.type === 'call' || saleFormData.type === 'hand_cash') ? saleFormData.agentId : undefined
         } : s));
       } else {
         const newSale: Sale = {
@@ -57,14 +59,15 @@ const SalesView: React.FC<SalesViewProps> = ({ leads, setLeads, sales, setSales,
           type: saleFormData.type,
           amount,
           adCost,
-          agentId: saleFormData.type === 'call' ? saleFormData.agentId : undefined,
+          comment: saleFormData.comment,
+          agentId: (saleFormData.type === 'call' || saleFormData.type === 'hand_cash') ? saleFormData.agentId : undefined,
           createdAt: saleFormData.date + "T12:00:00Z"
         };
-        setSales([newSale, ...sales]);
+        setSales(prev => [newSale, ...prev]);
       }
       setShowSaleModal(false);
       setEditId(null);
-      setSaleFormData({ amount: '', adCost: '', date: new Date().toISOString().split('T')[0], type: 'website', agentId: '' });
+      setSaleFormData({ amount: '', adCost: '', date: new Date().toISOString().split('T')[0], type: 'website', agentId: '', comment: '' });
     }
   };
 
@@ -98,18 +101,13 @@ const SalesView: React.FC<SalesViewProps> = ({ leads, setLeads, sales, setSales,
   const confirmDeleteAgent = () => {
     if (!agentToDelete) return;
     setAgents(prev => prev.filter(a => a.id !== agentToDelete.id));
-    // Optionally remove or unassign sales from this agent
-    // setSales(sales.map(s => s.agentId === agentToDelete.id ? { ...s, agentId: undefined } : s));
     setShowDeleteAgentModal(false);
     setAgentToDelete(null);
   };
 
   const deleteSale = (id: string) => {
-    // Note: In App.tsx we refactored to custom modals, but for quick deletion here 
-    // we use a simple check or can implement a local modal if desired. 
-    // Sticking to consistency with standard custom modals for major actions.
     if (window.confirm('Delete this financial entry?')) {
-      setSales(sales.filter(s => s.id !== id));
+      setSales(prev => prev.filter(s => s.id !== id));
     }
   };
 
@@ -120,7 +118,8 @@ const SalesView: React.FC<SalesViewProps> = ({ leads, setLeads, sales, setSales,
       adCost: sale.adCost.toString(),
       date: sale.createdAt.split('T')[0],
       type: sale.type,
-      agentId: sale.agentId || ''
+      agentId: sale.agentId || '',
+      comment: sale.comment || ''
     });
     setShowSaleModal(true);
   };
@@ -140,7 +139,7 @@ const SalesView: React.FC<SalesViewProps> = ({ leads, setLeads, sales, setSales,
         });
       }
     });
-    setSales([...newBatch, ...sales]);
+    setSales(prev => [...newBatch, ...prev]);
     setShowBulkSale(false);
     setBulkInputs({});
   };
@@ -153,6 +152,7 @@ const SalesView: React.FC<SalesViewProps> = ({ leads, setLeads, sales, setSales,
         s.type.toLowerCase().includes(search) ||
         (agent?.name.toLowerCase().includes(search)) ||
         s.amount.toString().includes(search) ||
+        (s.comment?.toLowerCase().includes(search)) ||
         s.createdAt.includes(search)
       );
     });
@@ -175,7 +175,7 @@ const SalesView: React.FC<SalesViewProps> = ({ leads, setLeads, sales, setSales,
              <UserPlus className="w-5 h-5" /> Recruit Agent
            </button>
            <button onClick={() => { setEditId(null); setShowSaleModal(true); }} className="flex items-center gap-3 bg-orange-600 px-6 py-4 rounded-2xl font-bold text-white shadow-xl transition-transform hover:scale-[1.02] text-xs uppercase tracking-widest">
-             <Globe className="w-5 h-5" /> Individual Sale
+             <Plus className="w-5 h-5" /> Individual Sale
            </button>
            <button onClick={() => setShowBulkSale(true)} className="flex items-center gap-3 bg-green-600 px-6 py-4 rounded-2xl font-bold text-white shadow-xl transition-transform hover:scale-[1.02] text-xs uppercase tracking-widest">
              <TrendingUp className="w-5 h-5" /> Call Ops Log
@@ -183,7 +183,6 @@ const SalesView: React.FC<SalesViewProps> = ({ leads, setLeads, sales, setSales,
         </div>
       </div>
 
-      {/* AGENT ROSTER MANAGEMENT */}
       <section className={`${cardBg} border-2 border-slate-800/10 rounded-[2rem] p-8 shadow-2xl`}>
          <div className="flex items-center justify-between mb-8">
             <h3 className={`text-xl font-bold ${textColor} flex items-center gap-3 uppercase tracking-tight`}>
@@ -212,17 +211,16 @@ const SalesView: React.FC<SalesViewProps> = ({ leads, setLeads, sales, setSales,
          </div>
       </section>
 
-      {/* REVENUE LEDGER TABLE */}
       <section className={`${cardBg} border-2 border-slate-800/10 rounded-[2rem] shadow-2xl overflow-hidden`}>
          <div className="p-8 border-b border-slate-800/10 flex flex-col md:flex-row justify-between items-center gap-6">
             <h3 className={`text-xl font-bold ${textColor} flex items-center gap-3 uppercase tracking-tight`}>
-               <BarChart3 className="w-6 h-6 text-red-500" />
+               <BarChart3 className="w-6 h-6 text-red-600" />
                Commercial Ledger
             </h3>
             <div className="relative w-full md:w-96">
                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                <input 
-                placeholder="Search by agent, channel, or amount..." 
+                placeholder="Search entries or comments..." 
                 className={`w-full ${inputBg} rounded-2xl py-4 pl-12 pr-6 border-none outline-none text-xs font-semibold ${textColor} focus:ring-1 focus:ring-red-500`}
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
@@ -237,8 +235,8 @@ const SalesView: React.FC<SalesViewProps> = ({ leads, setLeads, sales, setSales,
                      <th className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Date</th>
                      <th className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Channel</th>
                      <th className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Agent</th>
+                     <th className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Comment</th>
                      <th className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Amount (৳)</th>
-                     <th className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Ad Spend (৳)</th>
                      <th className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Actions</th>
                   </tr>
                </thead>
@@ -254,8 +252,12 @@ const SalesView: React.FC<SalesViewProps> = ({ leads, setLeads, sales, setSales,
                            <p className="text-[9px] text-slate-500 font-bold mt-1 uppercase">{new Date(sale.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                         </td>
                         <td className="px-8 py-6">
-                           <span className={`text-[9px] font-black px-3 py-1 rounded-full uppercase ${sale.type === 'website' ? 'bg-orange-500/10 text-orange-500' : 'bg-blue-500/10 text-blue-500'}`}>
-                              {sale.type}
+                           <span className={`text-[9px] font-black px-3 py-1 rounded-full uppercase ${
+                             sale.type === 'website' ? 'bg-orange-500/10 text-orange-500' : 
+                             sale.type === 'hand_cash' ? 'bg-green-500/10 text-green-500' : 
+                             'bg-blue-500/10 text-blue-500'
+                           }`}>
+                              {sale.type.replace('_', ' ')}
                            </span>
                         </td>
                         <td className="px-8 py-6">
@@ -264,11 +266,11 @@ const SalesView: React.FC<SalesViewProps> = ({ leads, setLeads, sales, setSales,
                               <p className={`text-xs font-bold uppercase ${textColor}`}>{agent?.name || 'Direct Order'}</p>
                            </div>
                         </td>
-                        <td className="px-8 py-6">
-                           <p className="text-sm font-bold text-green-500 tabular-nums">৳{sale.amount.toLocaleString()}</p>
+                        <td className="px-8 py-6 max-w-xs truncate">
+                           <p className={`text-xs italic text-slate-500`}>{sale.comment || '---'}</p>
                         </td>
                         <td className="px-8 py-6">
-                           <p className="text-sm font-bold text-red-500 tabular-nums">৳{(sale.adCost || 0).toLocaleString()}</p>
+                           <p className="text-sm font-bold text-green-500 tabular-nums">৳{sale.amount.toLocaleString()}</p>
                         </td>
                         <td className="px-8 py-6 text-center">
                            <div className="flex justify-center gap-3 opacity-0 group-hover:opacity-100 transition-all">
@@ -284,7 +286,6 @@ const SalesView: React.FC<SalesViewProps> = ({ leads, setLeads, sales, setSales,
          </div>
       </section>
 
-      {/* MODAL: RECRUIT / EDIT AGENT */}
       {showAgentModal && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-md">
            <div className={`${cardBg} border-2 border-slate-800 rounded-[2.5rem] p-10 w-full max-w-md shadow-2xl animate-in zoom-in-95`}>
@@ -328,13 +329,12 @@ const SalesView: React.FC<SalesViewProps> = ({ leads, setLeads, sales, setSales,
         </div>
       )}
 
-      {/* MODAL: DELETE AGENT CONFIRMATION */}
       {showDeleteAgentModal && (
         <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-md">
            <div className={`${cardBg} border-2 border-red-500/30 rounded-[2.5rem] p-10 w-full max-w-md shadow-2xl animate-in zoom-in-95`}>
               <div className="flex justify-center mb-6"><div className="w-16 h-16 rounded-full bg-red-600/10 flex items-center justify-center"><ShieldAlert className="w-8 h-8 text-red-600" /></div></div>
               <h3 className={`text-xl font-black ${textColor} text-center uppercase tracking-tight`}>Terminate Agent Service?</h3>
-              <p className="text-slate-500 text-center text-sm mt-4 leading-relaxed font-medium">Are you sure you want to remove "<span className="text-red-500 font-bold">{agentToDelete?.name}</span>" from the active roster? Past sales records will be preserved but show as 'Agent Removed'.</p>
+              <p className="text-slate-500 text-center text-sm mt-4 leading-relaxed font-medium">Are you sure you want to remove "<span className="text-red-500 font-bold">{agentToDelete?.name}</span>" from the active roster?</p>
               <div className="flex flex-col gap-3 mt-8">
                  <button onClick={confirmDeleteAgent} className="w-full py-4 bg-red-600 text-white font-black rounded-2xl uppercase text-xs tracking-widest shadow-xl shadow-red-900/30">Terminate Record</button>
                  <button onClick={() => { setShowDeleteAgentModal(false); setAgentToDelete(null); }} className="w-full py-4 text-slate-500 font-bold uppercase text-[10px] tracking-widest">Keep Agent</button>
@@ -343,7 +343,6 @@ const SalesView: React.FC<SalesViewProps> = ({ leads, setLeads, sales, setSales,
         </div>
       )}
 
-      {/* Sale Modal (Individual) */}
       {showSaleModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-md">
            <div className={`${cardBg} border-2 border-slate-800 rounded-[2.5rem] p-10 w-full max-w-lg shadow-2xl animate-in zoom-in-95`}>
@@ -361,9 +360,10 @@ const SalesView: React.FC<SalesViewProps> = ({ leads, setLeads, sales, setSales,
                       >
                          <option value="website">🌐 Website Sale</option>
                          <option value="call">📞 Call Center</option>
+                         <option value="hand_cash">💵 Hand Cash</option>
                       </select>
                     </div>
-                    {saleFormData.type === 'call' && (
+                    {(saleFormData.type === 'call' || saleFormData.type === 'hand_cash') && (
                        <div className="space-y-1">
                           <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Assign Agent</label>
                           <select 
@@ -399,6 +399,16 @@ const SalesView: React.FC<SalesViewProps> = ({ leads, setLeads, sales, setSales,
                  </div>
 
                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Comment / Reference</label>
+                    <textarea 
+                      className={`w-full ${inputBg} border-none rounded-2xl px-6 py-4 ${textColor} outline-none font-semibold text-xs`}
+                      rows={2}
+                      placeholder="Enter sale details or customer reference..."
+                      value={saleFormData.comment} onChange={e => setSaleFormData({...saleFormData, comment: e.target.value})}
+                    />
+                 </div>
+
+                 <div className="space-y-1">
                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Local Date</label>
                     <input 
                       type="date"
@@ -416,7 +426,6 @@ const SalesView: React.FC<SalesViewProps> = ({ leads, setLeads, sales, setSales,
         </div>
       )}
 
-      {/* Bulk Entry Modal */}
       {showBulkSale && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-md">
            <div className={`${cardBg} border-2 border-slate-800 rounded-[2.5rem] p-10 w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-2xl custom-scrollbar animate-in slide-in-from-bottom-5 duration-300`}>
@@ -430,7 +439,6 @@ const SalesView: React.FC<SalesViewProps> = ({ leads, setLeads, sales, setSales,
                     <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2">Shift Date (Dhaka Time)</p>
                     <input type="date" className="bg-slate-950 text-white font-bold text-xl rounded-xl px-4 py-2 border border-slate-700 outline-none" value={bulkDate} onChange={e => setBulkDate(e.target.value)} />
                  </div>
-                 <PhoneCall className="w-10 h-10 text-slate-700" />
               </div>
 
               <div className="space-y-4 mb-10">

@@ -37,9 +37,10 @@ export interface Lead {
 export interface Sale {
   id: string;
   agentId?: string;
-  type: 'call' | 'website';
+  type: 'call' | 'website' | 'hand_cash';
   amount: number;
   adCost: number;
+  comment?: string;
   createdAt: string;
 }
 
