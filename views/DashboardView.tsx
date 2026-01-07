@@ -88,38 +88,76 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
     );
   };
 
-  const filteredStats = useMemo(() => {
-    if (!stats) return stats;
+  /**
+   * REVENUE INTELLIGENCE ENGINE
+   * Recalculates ALL stats based on filtering sources
+   */
+  const intelligence = useMemo(() => {
+    if (!stats) return null;
 
     const showWeb = selectedSources.includes('website');
     const showCall = selectedSources.includes('call');
     const showBatch = selectedSources.includes('batch');
 
-    // Re-calculating primary totals based on filters
-    const filteredTotalRevenue = (showWeb ? stats.websiteRevenue : 0) + 
-                                (showCall ? stats.callRevenue : 0) + 
-                                (showBatch ? (stats.batchRevenue || 0) : 0);
-    
-    // We assume ad costs follow the source
-    // In App.tsx dailyBreakdown has adsCall, adsWeb, adsBatch
-    const filteredTotalAdCost = (showWeb ? stats.dailyBreakdown.reduce((a: any, d: any) => a + d.adsWeb, 0) : 0) +
-                                (showCall ? stats.dailyBreakdown.reduce((a: any, d: any) => a + d.adsCall, 0) : 0) +
-                                (showBatch ? stats.dailyBreakdown.reduce((a: any, d: any) => a + (d.adsBatch || 0), 0) : 0);
+    const dhakaNow = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Dhaka"}));
+    const todayStr = dhakaNow.toISOString().split('T')[0];
+    const startOfMonth = new Date(dhakaNow.getFullYear(), dhakaNow.getMonth(), 1);
 
-    const filteredNetProfit = filteredTotalRevenue - filteredTotalAdCost;
-    const filteredRoi = filteredTotalAdCost > 0 ? (filteredTotalRevenue / filteredTotalAdCost) : 0;
-    const filteredProgress = monthlyTarget > 0 ? Math.min(100, (filteredTotalRevenue / monthlyTarget * 100)) : 0;
+    // 1. Calculate Today's Pulse
+    const todaySales = sales.filter(s => s.createdAt.startsWith(todayStr));
+    const todayBatchRev = batchProjects.filter(b => b.createdAt.startsWith(todayStr))
+      .reduce((acc, b) => acc + b.students.reduce((sAcc, st) => sAcc + (Number(st.paid) || 0), 0), 0);
+    
+    const todayWebRev = todaySales.filter(s => s.type === 'website').reduce((acc, s) => acc + s.amount, 0);
+    const todayCallRev = todaySales.filter(s => s.type === 'call').reduce((acc, s) => acc + s.amount, 0);
+    
+    const todayWebAds = todaySales.filter(s => s.type === 'website').reduce((acc, s) => acc + s.adCost, 0);
+    const todayCallAds = todaySales.filter(s => s.type === 'call').reduce((acc, s) => acc + s.adCost, 0);
+    const todayBatchAds = batchProjects.filter(b => b.createdAt.startsWith(todayStr))
+      .reduce((acc, b) => acc + b.adCosts.reduce((cAcc, co) => cAcc + (Number(co.amount) || 0), 0), 0);
+
+    const filteredTodayRevenue = (showWeb ? todayWebRev : 0) + (showCall ? todayCallRev : 0) + (showBatch ? todayBatchRev : 0);
+    const filteredTodayAdCost = (showWeb ? todayWebAds : 0) + (showCall ? todayCallAds : 0) + (showBatch ? todayBatchAds : 0);
+    const filteredTodayCount = (showWeb ? todaySales.filter(s => s.type === 'website').length : 0) + 
+                               (showCall ? todaySales.filter(s => s.type === 'call').length : 0) +
+                               (showBatch ? batchProjects.filter(b => b.createdAt.startsWith(todayStr)).length : 0);
+
+    // 2. Calculate Monthly Totals
+    const filteredMonthlyRevenue = (showWeb ? stats.websiteRevenue : 0) + 
+                                   (showCall ? stats.callRevenue : 0) + 
+                                   (showBatch ? (stats.batchRevenue || 0) : 0);
+    
+    const filteredMonthlyAdCost = (showWeb ? stats.dailyBreakdown.reduce((a: any, d: any) => a + d.adsWeb, 0) : 0) +
+                                  (showCall ? stats.dailyBreakdown.reduce((a: any, d: any) => a + d.adsCall, 0) : 0) +
+                                  (showBatch ? stats.dailyBreakdown.reduce((a: any, d: any) => a + (d.adsBatch || 0), 0) : 0);
+
+    const filteredNetProfit = filteredMonthlyRevenue - filteredMonthlyAdCost;
+    const filteredRoi = filteredMonthlyAdCost > 0 ? (filteredMonthlyRevenue / filteredMonthlyAdCost) : 0;
+    
+    // 3. Target & Projection Stats
+    const filteredTargetLeft = Math.max(0, monthlyTarget - filteredMonthlyRevenue);
+    const filteredProgress = monthlyTarget > 0 ? Math.min(100, (filteredMonthlyRevenue / monthlyTarget * 100)) : 0;
+    const filteredDailyRequired = filteredTargetLeft / Math.max(1, stats.remainingDays || 1);
 
     return {
-      ...stats,
-      totalRevenue: filteredTotalRevenue,
-      totalAdCost: filteredTotalAdCost,
+      todayRevenue: filteredTodayRevenue,
+      todayAdCost: filteredTodayAdCost,
+      todayProfit: filteredTodayRevenue - filteredTodayAdCost,
+      todayCount: filteredTodayCount,
+      totalRevenue: filteredMonthlyRevenue,
+      totalAdCost: filteredMonthlyAdCost,
       netProfit: filteredNetProfit,
       roi: filteredRoi,
+      targetLeft: filteredTargetLeft,
       progressPercent: filteredProgress,
-      targetLeft: Math.max(0, monthlyTarget - filteredTotalRevenue)
+      dailyRequired: filteredDailyRequired,
+      remainingDays: stats.remainingDays,
+      dhakaDate: stats.dhakaDate,
+      dhakaTime: stats.dhakaTime,
+      agentLeaderboard: stats.agentLeaderboard, // Agent list stays same, filter logic handled in table if needed
+      dailyBreakdown: stats.dailyBreakdown
     };
-  }, [stats, selectedSources, monthlyTarget]);
+  }, [stats, selectedSources, monthlyTarget, sales, batchProjects]);
 
   const handleSaveTarget = () => {
     const num = parseInt(tempTarget.replace(/[^0-9]/g, ''));
@@ -141,10 +179,12 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
   const textColor = theme === 'dark' ? 'text-white' : 'text-gray-900';
   const inputBg = theme === 'dark' ? 'bg-slate-950' : 'bg-gray-100';
 
+  if (!intelligence) return null;
+
   return (
     <div className="space-y-10 animate-in fade-in duration-500 pb-12">
       
-      {/* TARGET TRACKER SECTION */}
+      {/* TARGET TRACKER SECTION - NOW FILTERED */}
       <section className={`${cardBg} border-2 border-red-600/20 rounded-[2.5rem] p-10 shadow-2xl relative overflow-hidden`}>
          <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none">
             <TargetIcon className="w-80 h-80 text-red-600" />
@@ -156,27 +196,27 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
                      <TargetIcon className="w-8 h-8 text-white" />
                   </div>
                   <div>
-                     <h2 className={`text-3xl font-black ${textColor} uppercase tracking-tight`}>Monthly Projection</h2>
-                     <p className="text-xs text-slate-500 font-bold uppercase tracking-[0.2em]">Revenue & Growth Mission</p>
+                     <h2 className={`text-3xl font-black ${textColor} uppercase tracking-tight`}>Filtered Projection</h2>
+                     <p className="text-xs text-slate-500 font-bold uppercase tracking-[0.2em]">Real-time Performance Goal</p>
                   </div>
                </div>
                
                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
                   <div>
                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Distance to Target</p>
-                     <p className="text-5xl font-black text-red-600 tabular-nums tracking-tighter">৳{formatNum(filteredStats?.targetLeft)}</p>
+                     <p className="text-5xl font-black text-red-600 tabular-nums tracking-tighter">৳{formatNum(intelligence.targetLeft)}</p>
                      <p className="text-[10px] text-slate-500 font-bold mt-2 uppercase">REMAINING GAP</p>
                   </div>
                   <div>
                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Daily Quota Required</p>
-                     <p className="text-5xl font-black text-yellow-500 tabular-nums tracking-tighter">৳{formatNum(Math.round(filteredStats?.dailyRequired || 0))}</p>
-                     <p className="text-[10px] text-slate-500 font-bold mt-2 uppercase">FOR {filteredStats?.remainingDays || 0} MORE DAYS</p>
+                     <p className="text-5xl font-black text-yellow-500 tabular-nums tracking-tighter">৳{formatNum(Math.round(intelligence.dailyRequired))}</p>
+                     <p className="text-[10px] text-slate-500 font-bold mt-2 uppercase">FOR {intelligence.remainingDays} MORE DAYS</p>
                   </div>
                   <div className="bg-slate-800/20 p-6 rounded-3xl border border-slate-700/30 flex flex-col justify-center">
                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 text-center">Velocity Score</p>
-                     <p className="text-3xl font-black text-green-500 text-center">{filteredStats?.progressPercent.toFixed(1)}%</p>
+                     <p className="text-3xl font-black text-green-500 text-center">{intelligence.progressPercent.toFixed(1)}%</p>
                      <div className="h-2 w-full bg-slate-800 rounded-full mt-3 overflow-hidden">
-                        <div className="h-full bg-green-500 transition-all duration-1000" style={{ width: `${filteredStats?.progressPercent}%` }} />
+                        <div className="h-full bg-green-500 transition-all duration-1000" style={{ width: `${intelligence.progressPercent}%` }} />
                      </div>
                   </div>
                </div>
@@ -226,7 +266,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
          </div>
       </section>
 
-      {/* TODAY'S MISSION PULSE */}
+      {/* TODAY'S MISSION PULSE - NOW FILTERED */}
       <section className={`${cardBg} border-2 border-indigo-600/10 rounded-[2.5rem] p-8 shadow-xl overflow-hidden relative group transition-all`}>
          <div className="absolute top-0 left-0 w-2 h-full bg-indigo-600 opacity-20" />
          <div className="flex flex-col md:flex-row items-center justify-between gap-8 relative z-10">
@@ -243,33 +283,33 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
             <div className="flex-1 grid grid-cols-2 lg:grid-cols-4 gap-6 w-full">
                <div className="flex flex-col items-center lg:items-start">
                   <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1"><Zap className="w-2 h-2 text-yellow-500" /> Revenue</span>
-                  <p className={`text-2xl font-black ${textColor} tabular-nums`}>৳{formatNum(filteredStats?.todayRevenue)}</p>
+                  <p className={`text-2xl font-black ${textColor} tabular-nums`}>৳{formatNum(intelligence.todayRevenue)}</p>
                </div>
                <div className="flex flex-col items-center lg:items-start">
                   <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1"><Flame className="w-2 h-2 text-red-500" /> Ad Burn</span>
-                  <p className="text-2xl font-black text-red-500 tabular-nums">৳{formatNum(filteredStats?.todayAdCost)}</p>
+                  <p className="text-2xl font-black text-red-500 tabular-nums">৳{formatNum(intelligence.todayAdCost)}</p>
                </div>
                <div className="flex flex-col items-center lg:items-start">
                   <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1"><BarChart3 className="w-2 h-2 text-green-500" /> Net Profit</span>
-                  <p className="text-2xl font-black text-green-500 tabular-nums">৳{formatNum(filteredStats?.todayNetProfit)}</p>
+                  <p className="text-2xl font-black text-green-500 tabular-nums">৳{formatNum(intelligence.todayProfit)}</p>
                </div>
                <div className="flex flex-col items-center lg:items-start">
                   <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1"><History className="w-2 h-2 text-blue-500" /> Ops Count</span>
-                  <p className="text-2xl font-black text-blue-500 tabular-nums">{filteredStats?.todayCount || 0} Sales</p>
+                  <p className="text-2xl font-black text-blue-500 tabular-nums">{intelligence.todayCount} Sales</p>
                </div>
             </div>
          </div>
       </section>
 
-      {/* CORE FINANCIAL METRICS */}
+      {/* CORE FINANCIAL METRICS - NOW FILTERED */}
       <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-         <InsightCard label="Global ROI" value={`${(filteredStats?.roi || 0).toFixed(2)}x`} icon={Rocket} color="green" theme={theme} desc={`Yield on Market Spend`} />
-         <InsightCard label="Gross Revenue" value={`৳${formatNum(filteredStats?.totalRevenue)}`} icon={Coins} color="blue" theme={theme} desc="Filtered monthly inflow" />
-         <InsightCard label="Market Spend" value={`৳${formatNum(filteredStats?.totalAdCost)}`} icon={Flame} color="red" theme={theme} desc="Filtered ad burn" />
-         <InsightCard label="Monthly Profit" value={`৳${formatNum(filteredStats?.netProfit)}`} icon={BarChart3} color="orange" theme={theme} desc="Net profit from sources" />
+         <InsightCard label="Global ROI" value={`${(intelligence.roi || 0).toFixed(2)}x`} icon={Rocket} color="green" theme={theme} desc={`Yield on Market Spend`} />
+         <InsightCard label="Gross Revenue" value={`৳${formatNum(intelligence.totalRevenue)}`} icon={Coins} color="blue" theme={theme} desc="Filtered monthly inflow" />
+         <InsightCard label="Market Spend" value={`৳${formatNum(intelligence.totalAdCost)}`} icon={Flame} color="red" theme={theme} desc="Filtered ad burn" />
+         <InsightCard label="Monthly Profit" value={`৳${formatNum(intelligence.netProfit)}`} icon={BarChart3} color="orange" theme={theme} desc="Net profit from sources" />
       </section>
 
-      {/* 🏆 SALES FORCE LEADERBOARD - RESTORED & ENHANCED */}
+      {/* 🏆 SALES FORCE LEADERBOARD */}
       <section className={`${cardBg} border-2 border-slate-800/10 rounded-[2.5rem] p-10 shadow-2xl`}>
          <div className="flex items-center justify-between mb-10 pb-6 border-b border-slate-800/20">
             <div>
@@ -286,7 +326,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
          </div>
 
          <div className="grid grid-cols-1 gap-6">
-            {(filteredStats?.agentLeaderboard || []).map((agent: any, index: number) => {
+            {(intelligence.agentLeaderboard || []).map((agent: any, index: number) => {
                const isExpanded = expandedAgentId === agent.id;
                const rankIcon = index === 0 ? <Crown className="w-5 h-5 text-yellow-500" /> : null;
                
@@ -321,7 +361,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
                            </div>
                            <div className="text-center xl:text-left">
                               <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Total Ad Burn</p>
-                              <p className="text-lg font-black text-red-500 tabular-nums">৳{formatNum(agent.adCost)}</p>
+                              <p className={`text-lg font-black text-red-500 tabular-nums`}>৳{formatNum(agent.adCost)}</p>
                            </div>
                            <div className="text-center xl:text-left">
                               <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Net Profit</p>
@@ -424,8 +464,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
                   </tr>
                </thead>
                <tbody className={`divide-y ${theme === 'dark' ? 'divide-slate-800/50' : 'divide-gray-100'}`}>
-                  {(filteredStats?.dailyBreakdown || []).map((day: any) => {
-                     // Check filters for the table as well
+                  {(intelligence.dailyBreakdown || []).map((day: any) => {
                      const showWeb = selectedSources.includes('website');
                      const showCall = selectedSources.includes('call');
                      const showBatch = selectedSources.includes('batch');

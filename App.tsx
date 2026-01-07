@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, 
@@ -131,18 +130,14 @@ const App: React.FC = () => {
   useEffect(() => {
     fetchAllData();
 
-    // Enable Realtime Syncing
     const channel = supabase
       .channel('db-live-updates')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public' },
         (payload) => {
-          // If the update came from another device, re-fetch data
-          // We use a small delay and check if we are currently mid-sync to prevent feedback loops
           if (!isSelfUpdating.current) {
             console.log('External change detected, syncing state...');
-            // Debounce re-fetch to handle multiple events from batch updates
             const timer = window.setTimeout(() => {
               fetchAllData();
             }, 500);
@@ -178,7 +173,8 @@ const App: React.FC = () => {
           
           await supabase.from(table).delete().neq('id', 'SYSTEM_RESERVED_ROOT');
           if (rows.length > 0) {
-            await supabase.from(table).insert(rows);
+            const { error } = await supabase.from(table).insert(rows);
+            if (error) throw error;
           }
         }
         setLastSyncTime(new Date().toLocaleTimeString());
@@ -186,10 +182,9 @@ const App: React.FC = () => {
         console.error(`Sync error on ${table}:`, err);
       } finally {
         setIsSyncing(false);
-        // Delay resetting the self-update flag to allow Realtime events to process/be ignored
         setTimeout(() => { isSelfUpdating.current = false; }, 1000);
       }
-    }, 1500);
+    }, 1000); // Shortened debounce for better responsiveness
   };
 
   useEffect(() => { persist('tasks', tasks); }, [tasks]);
@@ -270,8 +265,6 @@ const App: React.FC = () => {
   const exportToExcel = (dailyBreakdown: any[]) => {
     try {
       const wb = XLSX.utils.book_new();
-      
-      // 1. Monthly Ledger (Summary)
       const ledgerSheetData = (dailyBreakdown || []).map(d => ({
         'Date': d.date,
         'Operational Expenses': d.expenses,
@@ -285,8 +278,6 @@ const App: React.FC = () => {
       }));
       const ws1 = XLSX.utils.json_to_sheet(ledgerSheetData);
       XLSX.utils.book_append_sheet(wb, ws1, "Monthly Summary");
-
-      // 2. Full Sales Log
       const salesSheetData = (sales || []).map(s => ({
         'Date/Time': new Date(s.createdAt).toLocaleString(),
         'Channel': s.type.toUpperCase(),
@@ -297,8 +288,6 @@ const App: React.FC = () => {
       }));
       const ws2 = XLSX.utils.json_to_sheet(salesSheetData);
       XLSX.utils.book_append_sheet(wb, ws2, "Full Sales Log");
-
-      // 3. Full Expenses Log
       const expensesSheetData = (expenses || []).map(e => ({
         'Date': e.date,
         'Category': e.type.toUpperCase(),
@@ -308,8 +297,6 @@ const App: React.FC = () => {
       }));
       const ws3 = XLSX.utils.json_to_sheet(expensesSheetData);
       XLSX.utils.book_append_sheet(wb, ws3, "Expenses Registry");
-
-      // Save the file
       const fileName = `Learningmate_Full_Ledger_${new Date().toISOString().split('T')[0]}.xlsx`;
       XLSX.writeFile(wb, fileName);
     } catch (err) {
@@ -330,7 +317,6 @@ const App: React.FC = () => {
     const currentMonthExpenses = (expenses || []).filter(e => new Date(e.date) >= startOfMonth);
     const currentMonthBatches = (batchProjects || []).filter(b => new Date(b.createdAt) >= startOfMonth);
     
-    // Batch Revenue is the sum of all "paid" amounts in current month batches
     const batchRevenueTotal = currentMonthBatches.reduce((acc, b) => 
       acc + b.students.reduce((sAcc, student) => sAcc + (Number(student.paid) || 0), 0), 0
     );
@@ -391,25 +377,18 @@ const App: React.FC = () => {
       }
     }
 
-    // Individual Agent Leaderboard with Daily Breakdowns
     const agentLeaderboard = (agents || []).map(agent => {
       const agentSales = currentMonthSales.filter(s => s.agentId === agent.id);
-      
-      // Also attribute batch student "paid" revenue if advisor matches agent name
       const agentBatchRevenue = (batchProjects || []).reduce((acc, b) => 
         acc + b.students.filter(s => s.advisor === agent.name).reduce((sAcc, st) => sAcc + (Number(st.paid) || 0), 0), 0
       );
-
       const rev = agentSales.reduce((acc, s) => acc + (s.amount || 0), 0) + agentBatchRevenue;
       const cost = agentSales.reduce((acc, s) => acc + (s.adCost || 0), 0);
-      
-      // Calculate daily stats for the specific agent
       const agentDaily = [];
       const agentActiveDates = Array.from(new Set([
         ...agentSales.map(s => s.createdAt.split('T')[0]),
         ...(batchProjects || []).filter(b => b.students.some(s => s.advisor === agent.name)).map(b => b.createdAt.split('T')[0])
       ]));
-
       for (const dStr of agentActiveDates) {
         const dSales = agentSales.filter(s => s.createdAt.startsWith(dStr));
         const dBatchRev = (batchProjects || []).filter(b => b.createdAt.startsWith(dStr)).reduce((acc, b) => 
@@ -417,21 +396,11 @@ const App: React.FC = () => {
         );
         const dRev = dSales.reduce((acc, s) => acc + (s.amount || 0), 0) + dBatchRev;
         const dCost = dSales.reduce((acc, s) => acc + (s.adCost || 0), 0);
-        agentDaily.push({
-          date: dStr,
-          revenue: dRev,
-          adBurn: dCost,
-          profit: dRev - dCost
-        });
+        agentDaily.push({ date: dStr, revenue: dRev, adBurn: dCost, profit: dRev - dCost });
       }
-
       return { 
-        ...agent, 
-        revenue: rev, 
-        adCost: cost, 
-        profit: rev - cost,
-        roi: cost > 0 ? (rev / cost) : 0, 
-        count: agentSales.length,
+        ...agent, revenue: rev, adCost: cost, profit: rev - cost,
+        roi: cost > 0 ? (rev / cost) : 0, count: agentSales.length,
         dailyBreakdown: agentDaily.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       };
     }).sort((a, b) => b.revenue - a.revenue);
@@ -524,7 +493,6 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      {/* MODAL: RESET CONFIRMATION */}
       {showResetModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl animate-in fade-in duration-200">
            <div className={`w-full max-md ${theme === 'dark' ? 'bg-slate-900 border-red-500/30' : 'bg-white border-gray-200'} border-2 rounded-[2.5rem] p-10 shadow-2xl`}>
@@ -539,7 +507,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL: DELETE VERSION CONFIRMATION */}
       {showDeleteVersionModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl animate-in fade-in duration-200">
            <div className={`w-full max-md ${theme === 'dark' ? 'bg-slate-900 border-red-500/30' : 'bg-white border-gray-200'} border-2 rounded-[2.5rem] p-10 shadow-2xl`}>
@@ -554,7 +521,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL: RESTORE CONFIRMATION */}
       {showRestoreModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl animate-in fade-in duration-200">
            <div className={`w-full max-md ${theme === 'dark' ? 'bg-slate-900 border-blue-500/30' : 'bg-white border-gray-200'} border-2 rounded-[2.5rem] p-10 shadow-2xl`}>
@@ -569,7 +535,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL: BACKUP PROMPT */}
       {showBackupModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl animate-in fade-in duration-200">
            <div className={`w-full max-md ${theme === 'dark' ? 'bg-slate-900 border-blue-500/30' : 'bg-white border-gray-200'} border-2 rounded-[2.5rem] p-10 shadow-2xl`}>
