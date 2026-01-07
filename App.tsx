@@ -83,6 +83,7 @@ const App: React.FC = () => {
 
   const initialLoadDone = useRef(false);
   const syncTimeoutRef = useRef<Record<string, number>>({});
+  const isSelfUpdating = useRef(false);
 
   const fetchAllData = async () => {
     setIsSyncing(true);
@@ -129,6 +130,31 @@ const App: React.FC = () => {
 
   useEffect(() => {
     fetchAllData();
+
+    // Enable Realtime Syncing
+    const channel = supabase
+      .channel('db-live-updates')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public' },
+        (payload) => {
+          // If the update came from another device, re-fetch data
+          // We use a small delay and check if we are currently mid-sync to prevent feedback loops
+          if (!isSelfUpdating.current) {
+            console.log('External change detected, syncing state...');
+            // Debounce re-fetch to handle multiple events from batch updates
+            const timer = window.setTimeout(() => {
+              fetchAllData();
+            }, 500);
+            return () => clearTimeout(timer);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const persist = async (table: string, data: any[], isConfig: boolean = false) => {
@@ -140,6 +166,7 @@ const App: React.FC = () => {
 
     syncTimeoutRef.current[table] = window.setTimeout(async () => {
       setIsSyncing(true);
+      isSelfUpdating.current = true;
       try {
         if (isConfig) {
           await supabase.from(table).upsert({ key: 'monthly_target', value: data });
@@ -159,6 +186,8 @@ const App: React.FC = () => {
         console.error(`Sync error on ${table}:`, err);
       } finally {
         setIsSyncing(false);
+        // Delay resetting the self-update flag to allow Realtime events to process/be ignored
+        setTimeout(() => { isSelfUpdating.current = false; }, 1000);
       }
     }, 1500);
   };

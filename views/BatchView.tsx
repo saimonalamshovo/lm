@@ -35,7 +35,15 @@ const BatchView: React.FC<BatchViewProps> = ({ batchProjects, setBatchProjects, 
   const [showAdCostModal, setShowAdCostModal] = useState(false);
   const [batchSearchTerm, setBatchSearchTerm] = useState('');
   
-  const [batchFormData, setBatchFormData] = useState({
+  // Header editing state (for Detail View)
+  const [headerFormData, setHeaderFormData] = useState({
+    courseName: '',
+    landingPage: '',
+    startDate: ''
+  });
+
+  // Modal initialization state (for NEW project)
+  const [modalFormData, setModalFormData] = useState({
     courseName: '',
     landingPage: '',
     startDate: new Date().toISOString().split('T')[0]
@@ -52,10 +60,10 @@ const BatchView: React.FC<BatchViewProps> = ({ batchProjects, setBatchProjects, 
     [batchProjects, selectedBatchId]
   );
 
-  // Sync batchFormData with activeBatch when selection changes to prevent "blank" fields
+  // Sync headerFormData with activeBatch when a batch is selected
   useEffect(() => {
     if (activeBatch) {
-      setBatchFormData({
+      setHeaderFormData({
         courseName: activeBatch.courseName,
         landingPage: activeBatch.landingPage,
         startDate: activeBatch.startDate
@@ -71,8 +79,7 @@ const BatchView: React.FC<BatchViewProps> = ({ batchProjects, setBatchProjects, 
   const saveBatch = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate inputs aren't empty
-    if (!batchFormData.courseName.trim()) {
+    if (!modalFormData.courseName.trim()) {
       alert("Course name is required");
       return;
     }
@@ -80,9 +87,9 @@ const BatchView: React.FC<BatchViewProps> = ({ batchProjects, setBatchProjects, 
     const id = Math.random().toString(36).substr(2, 9);
     const newBatch: BatchProject = {
       id,
-      courseName: batchFormData.courseName,
-      landingPage: batchFormData.landingPage,
-      startDate: batchFormData.startDate,
+      courseName: modalFormData.courseName,
+      landingPage: modalFormData.landingPage,
+      startDate: modalFormData.startDate,
       students: [],
       adCosts: [],
       createdAt: new Date().toISOString()
@@ -90,17 +97,19 @@ const BatchView: React.FC<BatchViewProps> = ({ batchProjects, setBatchProjects, 
     
     setBatchProjects([newBatch, ...batchProjects]);
     setShowBatchModal(false);
+    // Explicitly select the new batch so the detail view opens immediately with data
     setSelectedBatchId(id);
-    // Don't reset batchFormData here, the useEffect will keep it in sync with the new activeBatch
+    // Reset modal data for next time
+    setModalFormData({ courseName: '', landingPage: '', startDate: new Date().toISOString().split('T')[0] });
   };
 
   const updateBatchHeader = () => {
     if (!activeBatch) return;
     setBatchProjects(prev => prev.map(b => b.id === activeBatch.id ? { 
       ...b, 
-      courseName: batchFormData.courseName,
-      landingPage: batchFormData.landingPage,
-      startDate: batchFormData.startDate
+      courseName: headerFormData.courseName,
+      landingPage: headerFormData.landingPage,
+      startDate: headerFormData.startDate
     } : b));
     alert("Project Header Synchronized.");
   };
@@ -207,8 +216,8 @@ const BatchView: React.FC<BatchViewProps> = ({ batchProjects, setBatchProjects, 
                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-4">Batch Course Title</label>
                  <input 
                   className={`w-full ${inputBg} border-none rounded-2xl px-6 py-4 ${textColor} outline-none font-black uppercase italic`}
-                  value={batchFormData.courseName}
-                  onChange={e => setBatchFormData({...batchFormData, courseName: e.target.value})}
+                  value={headerFormData.courseName}
+                  onChange={e => setHeaderFormData({...headerFormData, courseName: e.target.value})}
                  />
               </div>
               <div className="space-y-2">
@@ -217,8 +226,8 @@ const BatchView: React.FC<BatchViewProps> = ({ batchProjects, setBatchProjects, 
                    <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                    <input 
                     className={`w-full ${inputBg} border-none rounded-2xl pl-12 pr-6 py-4 ${textColor} outline-none font-bold text-xs`}
-                    value={batchFormData.landingPage}
-                    onChange={e => setBatchFormData({...batchFormData, landingPage: e.target.value})}
+                    value={headerFormData.landingPage}
+                    onChange={e => setHeaderFormData({...headerFormData, landingPage: e.target.value})}
                    />
                  </div>
               </div>
@@ -227,8 +236,8 @@ const BatchView: React.FC<BatchViewProps> = ({ batchProjects, setBatchProjects, 
                  <input 
                   type="date"
                   className={`w-full ${inputBg} border-none rounded-2xl px-6 py-4 ${textColor} outline-none font-bold`}
-                  value={batchFormData.startDate}
-                  onChange={e => setBatchFormData({...batchFormData, startDate: e.target.value})}
+                  value={headerFormData.startDate}
+                  onChange={e => setHeaderFormData({...headerFormData, startDate: e.target.value})}
                  />
               </div>
            </div>
@@ -421,7 +430,7 @@ const BatchView: React.FC<BatchViewProps> = ({ batchProjects, setBatchProjects, 
         </div>
         <button 
           onClick={() => {
-            setBatchFormData({ courseName: '', landingPage: '', startDate: new Date().toISOString().split('T')[0] });
+            setModalFormData({ courseName: '', landingPage: '', startDate: new Date().toISOString().split('T')[0] });
             setShowBatchModal(true);
           }} 
           className="flex items-center gap-3 bg-blue-600 px-8 py-4 rounded-2xl font-black text-white shadow-xl shadow-blue-900/40 transition-transform hover:scale-[1.02] uppercase text-xs tracking-widest italic"
@@ -512,8 +521,8 @@ const BatchView: React.FC<BatchViewProps> = ({ batchProjects, setBatchProjects, 
                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-4">Course Name</label>
                     <input 
                       className={`w-full ${inputBg} border-none rounded-2xl px-6 py-4 ${textColor} outline-none font-bold uppercase`}
-                      value={batchFormData.courseName}
-                      onChange={e => setBatchFormData({...batchFormData, courseName: e.target.value})}
+                      value={modalFormData.courseName}
+                      onChange={e => setModalFormData({...modalFormData, courseName: e.target.value})}
                       required
                       autoFocus
                     />
@@ -522,8 +531,8 @@ const BatchView: React.FC<BatchViewProps> = ({ batchProjects, setBatchProjects, 
                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-4">Landing Vector (URL)</label>
                     <input 
                       className={`w-full ${inputBg} border-none rounded-2xl px-6 py-4 ${textColor} outline-none font-bold text-xs`}
-                      value={batchFormData.landingPage}
-                      onChange={e => setBatchFormData({...batchFormData, landingPage: e.target.value})}
+                      value={modalFormData.landingPage}
+                      onChange={e => setModalFormData({...modalFormData, landingPage: e.target.value})}
                       placeholder="https://..."
                     />
                  </div>
@@ -532,8 +541,8 @@ const BatchView: React.FC<BatchViewProps> = ({ batchProjects, setBatchProjects, 
                     <input 
                       type="date"
                       className={`w-full ${inputBg} border-none rounded-2xl px-6 py-4 ${textColor} outline-none font-bold`}
-                      value={batchFormData.startDate}
-                      onChange={e => setBatchFormData({...batchFormData, startDate: e.target.value})}
+                      value={modalFormData.startDate}
+                      onChange={e => setModalFormData({...modalFormData, startDate: e.target.value})}
                       required
                     />
                  </div>
