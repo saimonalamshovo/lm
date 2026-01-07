@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Plus, 
   Search, 
@@ -11,7 +11,6 @@ import {
   Users, 
   Coins, 
   ArrowLeft, 
-  // Added missing ArrowRight icon import
   ArrowRight,
   Save, 
   ExternalLink,
@@ -53,6 +52,17 @@ const BatchView: React.FC<BatchViewProps> = ({ batchProjects, setBatchProjects, 
     [batchProjects, selectedBatchId]
   );
 
+  // Sync batchFormData with activeBatch when selection changes to prevent "blank" fields
+  useEffect(() => {
+    if (activeBatch) {
+      setBatchFormData({
+        courseName: activeBatch.courseName,
+        landingPage: activeBatch.landingPage,
+        startDate: activeBatch.startDate
+      });
+    }
+  }, [selectedBatchId, activeBatch?.id]);
+
   const filteredBatches = useMemo(() => 
     batchProjects.filter(b => b.courseName.toLowerCase().includes(batchSearchTerm.toLowerCase())),
     [batchProjects, batchSearchTerm]
@@ -60,25 +70,38 @@ const BatchView: React.FC<BatchViewProps> = ({ batchProjects, setBatchProjects, 
 
   const saveBatch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (selectedBatchId && !showBatchModal) return; // Editing existing via detail view logic if needed
+    
+    // Validate inputs aren't empty
+    if (!batchFormData.courseName.trim()) {
+      alert("Course name is required");
+      return;
+    }
 
     const id = Math.random().toString(36).substr(2, 9);
     const newBatch: BatchProject = {
       id,
-      ...batchFormData,
+      courseName: batchFormData.courseName,
+      landingPage: batchFormData.landingPage,
+      startDate: batchFormData.startDate,
       students: [],
       adCosts: [],
       createdAt: new Date().toISOString()
     };
+    
     setBatchProjects([newBatch, ...batchProjects]);
     setShowBatchModal(false);
-    setBatchFormData({ courseName: '', landingPage: '', startDate: new Date().toISOString().split('T')[0] });
     setSelectedBatchId(id);
+    // Don't reset batchFormData here, the useEffect will keep it in sync with the new activeBatch
   };
 
   const updateBatchHeader = () => {
     if (!activeBatch) return;
-    setBatchProjects(prev => prev.map(b => b.id === activeBatch.id ? { ...b, ...batchFormData } : b));
+    setBatchProjects(prev => prev.map(b => b.id === activeBatch.id ? { 
+      ...b, 
+      courseName: batchFormData.courseName,
+      landingPage: batchFormData.landingPage,
+      startDate: batchFormData.startDate
+    } : b));
     alert("Project Header Synchronized.");
   };
 
@@ -396,7 +419,13 @@ const BatchView: React.FC<BatchViewProps> = ({ batchProjects, setBatchProjects, 
           <h2 className={`text-4xl font-black ${textColor} uppercase tracking-tighter italic`}>Batch/Live Hub</h2>
           <p className="text-xs text-slate-500 font-black uppercase tracking-[0.2em] mt-1">Multi-Project Operational Flow</p>
         </div>
-        <button onClick={() => setShowBatchModal(true)} className="flex items-center gap-3 bg-blue-600 px-8 py-4 rounded-2xl font-black text-white shadow-xl shadow-blue-900/40 transition-transform hover:scale-[1.02] uppercase text-xs tracking-widest italic">
+        <button 
+          onClick={() => {
+            setBatchFormData({ courseName: '', landingPage: '', startDate: new Date().toISOString().split('T')[0] });
+            setShowBatchModal(true);
+          }} 
+          className="flex items-center gap-3 bg-blue-600 px-8 py-4 rounded-2xl font-black text-white shadow-xl shadow-blue-900/40 transition-transform hover:scale-[1.02] uppercase text-xs tracking-widest italic"
+        >
           <Plus className="w-5 h-5" /> Initialize New Batch
         </button>
       </div>
@@ -424,7 +453,6 @@ const BatchView: React.FC<BatchViewProps> = ({ batchProjects, setBatchProjects, 
               key={batch.id} 
               className={`${cardBg} border-2 border-slate-800/10 rounded-[3rem] p-10 shadow-2xl group hover:border-blue-500/30 transition-all cursor-pointer relative overflow-hidden`}
               onClick={() => {
-                setBatchFormData({ courseName: batch.courseName, landingPage: batch.landingPage, startDate: batch.startDate });
                 setSelectedBatchId(batch.id);
               }}
              >

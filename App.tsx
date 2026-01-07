@@ -498,7 +498,7 @@ const App: React.FC = () => {
       {/* MODAL: RESET CONFIRMATION */}
       {showResetModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl animate-in fade-in duration-200">
-           <div className={`w-full max-w-md ${theme === 'dark' ? 'bg-slate-900 border-red-500/30' : 'bg-white border-gray-200'} border-2 rounded-[2.5rem] p-10 shadow-2xl`}>
+           <div className={`w-full max-md ${theme === 'dark' ? 'bg-slate-900 border-red-500/30' : 'bg-white border-gray-200'} border-2 rounded-[2.5rem] p-10 shadow-2xl`}>
               <div className="flex justify-center mb-6"><div className="w-16 h-16 rounded-full bg-red-600/10 flex items-center justify-center"><AlertTriangle className="w-8 h-8 text-red-600" /></div></div>
               <h3 className={`text-xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-900'} text-center uppercase tracking-tight`}>Danger: System Wipe</h3>
               <p className="text-slate-500 text-center text-sm mt-4 leading-relaxed font-medium">This will permanently delete all sales, leads, tasks, and operational history. Changes are irreversible.</p>
@@ -513,7 +513,7 @@ const App: React.FC = () => {
       {/* MODAL: DELETE VERSION CONFIRMATION */}
       {showDeleteVersionModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl animate-in fade-in duration-200">
-           <div className={`w-full max-w-md ${theme === 'dark' ? 'bg-slate-900 border-red-500/30' : 'bg-white border-gray-200'} border-2 rounded-[2.5rem] p-10 shadow-2xl`}>
+           <div className={`w-full max-md ${theme === 'dark' ? 'bg-slate-900 border-red-500/30' : 'bg-white border-gray-200'} border-2 rounded-[2.5rem] p-10 shadow-2xl`}>
               <div className="flex justify-center mb-6"><div className="w-16 h-16 rounded-full bg-red-600/10 flex items-center justify-center"><Trash2 className="w-8 h-8 text-red-600" /></div></div>
               <h3 className={`text-xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-900'} text-center uppercase tracking-tight`}>Delete History Point?</h3>
               <p className="text-slate-500 text-center text-sm mt-4 leading-relaxed font-medium">Are you sure you want to remove the snapshot "<span className="text-red-500 font-bold">{versionToDelete?.name}</span>"? This cannot be undone.</p>
@@ -528,7 +528,7 @@ const App: React.FC = () => {
       {/* MODAL: RESTORE CONFIRMATION */}
       {showRestoreModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl animate-in fade-in duration-200">
-           <div className={`w-full max-w-md ${theme === 'dark' ? 'bg-slate-900 border-blue-500/30' : 'bg-white border-gray-200'} border-2 rounded-[2.5rem] p-10 shadow-2xl`}>
+           <div className={`w-full max-md ${theme === 'dark' ? 'bg-slate-900 border-blue-500/30' : 'bg-white border-gray-200'} border-2 rounded-[2.5rem] p-10 shadow-2xl`}>
               <div className="flex justify-center mb-6"><div className="w-16 h-16 rounded-full bg-blue-600/10 flex items-center justify-center"><RotateCcw className="w-8 h-8 text-blue-600" /></div></div>
               <h3 className={`text-xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-900'} text-center uppercase tracking-tight`}>Restore Progress?</h3>
               <p className="text-slate-500 text-center text-sm mt-4 leading-relaxed font-medium">This will replace all current data with the state from "<span className="text-blue-500 font-bold">{versionToRestore?.name}</span>". Any unsaved current changes will be lost.</p>
@@ -543,7 +543,7 @@ const App: React.FC = () => {
       {/* MODAL: BACKUP PROMPT */}
       {showBackupModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl animate-in fade-in duration-200">
-           <div className={`w-full max-w-md ${theme === 'dark' ? 'bg-slate-900 border-blue-500/30' : 'bg-white border-gray-200'} border-2 rounded-[2.5rem] p-10 shadow-2xl`}>
+           <div className={`w-full max-md ${theme === 'dark' ? 'bg-slate-900 border-blue-500/30' : 'bg-white border-gray-200'} border-2 rounded-[2.5rem] p-10 shadow-2xl`}>
               <div className="flex justify-between items-center mb-8">
                 <h3 className={`text-xl font-black ${theme === 'dark' ? 'text-white' : 'text-slate-900'} uppercase tracking-tight`}>Create Backup</h3>
                 <button onClick={() => setShowBackupModal(false)} className="text-slate-500"><X className="w-6 h-6" /></button>
