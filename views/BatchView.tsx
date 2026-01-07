@@ -15,7 +15,8 @@ import {
   Save, 
   PlusCircle,
   Zap,
-  Check
+  Check,
+  AlertCircle
 } from 'lucide-react';
 import { BatchProject, Student, BatchAdCost, Agent } from '../types';
 
@@ -118,7 +119,7 @@ const BatchView: React.FC<BatchViewProps> = ({ batchProjects, setBatchProjects, 
         </div>
 
         <section className={`${cardBg} border-2 border-slate-800/20 rounded-[2.5rem] p-10 shadow-2xl`}>
-           <div className="grid grid-cols-1 xl:grid-cols-3 gap-10">
+           <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
               <div className="space-y-2">
                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-4">Batch Course Title</label>
                  <input className={`w-full ${inputBg} border-none rounded-2xl px-6 py-4 ${textColor} outline-none font-black uppercase italic`} value={headerFormData.courseName} onChange={e => setHeaderFormData({...headerFormData, courseName: e.target.value})} />
@@ -130,6 +131,10 @@ const BatchView: React.FC<BatchViewProps> = ({ batchProjects, setBatchProjects, 
               <div className="bg-slate-800/30 p-4 rounded-3xl border border-slate-700/50 flex flex-col justify-center">
                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Total Paid (৳)</p>
                  <p className="text-2xl font-black text-green-500">৳{totals.paid.toLocaleString()}</p>
+              </div>
+              <div className="bg-red-500/10 p-4 rounded-3xl border border-red-500/20 flex flex-col justify-center">
+                 <p className="text-[9px] font-black text-red-500 uppercase tracking-widest mb-1">Total Due (৳)</p>
+                 <p className="text-2xl font-black text-red-500">৳{totals.due.toLocaleString()}</p>
               </div>
            </div>
         </section>
@@ -147,6 +152,7 @@ const BatchView: React.FC<BatchViewProps> = ({ batchProjects, setBatchProjects, 
                     <tr className={theme === 'dark' ? 'bg-slate-950/50' : 'bg-gray-100'}>
                        <th className="px-6 py-4 text-[9px] font-black text-slate-500 uppercase tracking-widest">Name</th>
                        <th className="px-6 py-4 text-[9px] font-black text-slate-500 uppercase tracking-widest">Paid (৳)</th>
+                       <th className="px-6 py-4 text-[9px] font-black text-slate-500 uppercase tracking-widest text-red-500">Due (৳)</th>
                        <th className="px-6 py-4 text-[9px] font-black text-slate-500 uppercase tracking-widest">Advisor</th>
                        <th className="px-6 py-4 text-[9px] font-black text-slate-500 uppercase tracking-widest text-center">X</th>
                     </tr>
@@ -159,6 +165,9 @@ const BatchView: React.FC<BatchViewProps> = ({ batchProjects, setBatchProjects, 
                         </td>
                         <td className="px-4 py-2">
                            <input type="number" className="w-24 bg-transparent border-none outline-none text-green-500 text-xs font-black" value={student.paid} onChange={e => updateStudent(student.id, 'paid', e.target.value)} />
+                        </td>
+                        <td className="px-4 py-2">
+                           <input type="number" className="w-24 bg-transparent border-none outline-none text-red-500 text-xs font-black" value={student.due} onChange={e => updateStudent(student.id, 'due', e.target.value)} />
                         </td>
                         <td className="px-4 py-2">
                            <select className="w-full bg-transparent border-none outline-none text-white text-[10px] font-black uppercase" value={student.advisor} onChange={e => updateStudent(student.id, 'advisor', e.target.value)}>
@@ -241,7 +250,10 @@ const BatchView: React.FC<BatchViewProps> = ({ batchProjects, setBatchProjects, 
               <h3 className={`text-2xl font-black ${textColor} uppercase italic tracking-tighter mb-2 truncate`}>{batch.courseName}</h3>
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-8">LAUNCH: {batch.startDate}</p>
               <div className="flex items-center justify-between pt-6 border-t border-slate-800/20">
-                 <p className="text-xs font-black text-blue-500 uppercase">৳{batch.students.reduce((a, s) => a + (Number(s.paid) || 0), 0).toLocaleString()}</p>
+                 <div className="flex flex-col">
+                    <p className="text-[9px] font-black text-slate-500 uppercase">Paid/Due</p>
+                    <p className="text-xs font-black text-blue-500 uppercase">৳{batch.students.reduce((a, s) => a + (Number(s.paid) || 0), 0).toLocaleString()} / <span className="text-red-500">৳{batch.students.reduce((a, s) => a + (Number(s.due) || 0), 0).toLocaleString()}</span></p>
+                 </div>
                  <ArrowRight className="w-5 h-5 text-slate-700 group-hover:text-blue-500 transition-colors" />
               </div>
            </div>
