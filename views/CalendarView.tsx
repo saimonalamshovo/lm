@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Calendar as CalendarIcon, Zap, Target, Receipt, X, LayoutGrid } from 'lucide-react';
+import { Calendar as CalendarIcon, Zap, Target, Receipt, X, LayoutGrid, ArrowLeftCircle, ArrowRightCircle } from 'lucide-react';
 import { Task, Sale, Expense, TeamMember, Agent, BatchProject } from '../types';
 
 interface CalendarViewProps {
@@ -15,9 +15,10 @@ interface CalendarViewProps {
 
 const CalendarView: React.FC<CalendarViewProps> = ({ tasks, sales, expenses, theme, teamMembers, agents, filteredBatches }) => {
   const [selectedDateDetail, setSelectedDateDetail] = useState<string | null>(null);
-  const now = new Date();
-  const currentMonth = now.getMonth();
-  const currentYear = now.getFullYear();
+  const [currentDate, setCurrentDate] = useState(new Date()); // State for calendar navigation
+  
+  const currentMonth = currentDate.getMonth();
+  const currentYear = currentDate.getFullYear();
   
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
   const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay();
@@ -28,6 +29,12 @@ const CalendarView: React.FC<CalendarViewProps> = ({ tasks, sales, expenses, the
   const cardBg = theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-200 shadow-sm';
   const textColor = theme === 'dark' ? 'text-white' : 'text-gray-900';
   const cellBg = theme === 'dark' ? 'bg-slate-950/40 border-slate-800 hover:border-slate-600' : 'bg-white border-gray-100 hover:border-gray-200 shadow-inner';
+
+  const changeMonth = (offset: number) => {
+    const newDate = new Date(currentDate);
+    newDate.setMonth(newDate.getMonth() + offset);
+    setCurrentDate(newDate);
+  };
 
   const dayDetail = selectedDateDetail ? {
     date: selectedDateDetail,
@@ -42,7 +49,12 @@ const CalendarView: React.FC<CalendarViewProps> = ({ tasks, sales, expenses, the
       <div className="flex justify-between items-center flex-shrink-0">
         <div>
           <h2 className={`text-3xl font-black ${textColor} italic uppercase`}>Grid Intelligence</h2>
-          <p className={`text-xs text-slate-500 font-bold uppercase tracking-widest`}>{now.toLocaleString('default', { month: 'long', year: 'numeric' })} Operations</p>
+          <p className={`text-xs text-slate-500 font-bold uppercase tracking-widest`}>{currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })} Operations</p>
+        </div>
+        <div className="flex items-center gap-2">
+            <button onClick={() => changeMonth(-1)} className="p-2 hover:bg-slate-800 rounded-full transition-all text-slate-400 hover:text-white"><ArrowLeftCircle className="w-6 h-6" /></button>
+            <button onClick={() => setCurrentDate(new Date())} className="text-xs font-black uppercase bg-red-600/10 text-red-500 px-3 py-1 rounded-full border border-red-500/20 hover:bg-red-600 hover:text-white transition-all">Today</button>
+            <button onClick={() => changeMonth(1)} className="p-2 hover:bg-slate-800 rounded-full transition-all text-slate-400 hover:text-white"><ArrowRightCircle className="w-6 h-6" /></button>
         </div>
       </div>
 
@@ -61,7 +73,10 @@ const CalendarView: React.FC<CalendarViewProps> = ({ tasks, sales, expenses, the
               const daySales = sales.filter(s => s.createdAt.startsWith(dateStr));
               const dayBatchRev = filteredBatches.filter(b => b.createdAt.startsWith(dateStr))
                 .reduce((acc, b) => acc + b.students.reduce((sA, s) => sA + (Number(s.paid) || 0), 0), 0);
-              const isToday = day === now.getDate();
+              
+              // Check if "today" matches the cell date
+              const realToday = new Date();
+              const isToday = day === realToday.getDate() && currentMonth === realToday.getMonth() && currentYear === realToday.getFullYear();
 
               return (
                 <div 

@@ -16,7 +16,9 @@ import {
   Download,
   RotateCcw,
   Save,
-  AlertTriangle
+  AlertTriangle,
+  Menu,
+  X
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { supabase } from './supabaseClient';
@@ -51,6 +53,10 @@ const App: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // New State for Historical Viewing
+  const [dashboardDate, setDashboardDate] = useState(new Date());
 
   const [selectedSources, setSelectedSources] = useState<string[]>(['website', 'call', 'batch', 'hand_cash']);
 
@@ -216,16 +222,41 @@ const App: React.FC = () => {
 
   const stats = useMemo(() => {
     const dhakaNow = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Dhaka"}));
-    const startOfMonth = new Date(dhakaNow.getFullYear(), dhakaNow.getMonth(), 1);
-    const lastDay = new Date(dhakaNow.getFullYear(), dhakaNow.getMonth() + 1, 0).getDate();
-    const remainingDays = Math.max(1, lastDay - dhakaNow.getDate() + 1);
+    
+    // View Window Based on Dashboard Date
+    const viewYear = dashboardDate.getFullYear();
+    const viewMonth = dashboardDate.getMonth();
+    const lastDay = new Date(viewYear, viewMonth + 1, 0).getDate();
+
+    // Remaining Days Logic
+    let remainingDays = 0;
+    if (viewYear === dhakaNow.getFullYear() && viewMonth === dhakaNow.getMonth()) {
+        remainingDays = Math.max(1, lastDay - dhakaNow.getDate() + 1);
+    } else if (new Date(viewYear, viewMonth, 1) > dhakaNow) {
+        remainingDays = lastDay; // Future month
+    } else {
+        remainingDays = 0; // Past month
+    }
 
     const showBatch = selectedSources.includes('batch');
 
     const filteredSales = sales.filter(s => selectedSources.includes(s.type));
-    const monthSales = filteredSales.filter(s => new Date(s.createdAt) >= startOfMonth);
-    const monthExpenses = expenses.filter(e => new Date(e.date) >= startOfMonth);
-    const monthBatches = batchProjects.filter(b => new Date(b.createdAt) >= startOfMonth);
+    
+    // STRICT MONTH FILTERING
+    const monthSales = filteredSales.filter(s => {
+      const d = new Date(s.createdAt);
+      return d.getMonth() === viewMonth && d.getFullYear() === viewYear;
+    });
+    
+    const monthExpenses = expenses.filter(e => {
+      const d = new Date(e.date);
+      return d.getMonth() === viewMonth && d.getFullYear() === viewYear;
+    });
+    
+    const monthBatches = batchProjects.filter(b => {
+      const d = new Date(b.createdAt);
+      return d.getMonth() === viewMonth && d.getFullYear() === viewYear;
+    });
 
     const revWeb = monthSales.filter(s => s.type === 'website').reduce((acc, s) => acc + s.amount, 0);
     const revCall = monthSales.filter(s => s.type === 'call').reduce((acc, s) => acc + s.amount, 0);
@@ -239,7 +270,7 @@ const App: React.FC = () => {
 
     const dailyBreakdown = [];
     for (let i = 1; i <= lastDay; i++) {
-      const dStr = `${dhakaNow.getFullYear()}-${String(dhakaNow.getMonth()+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
+      const dStr = `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
       const dSales = filteredSales.filter(s => s.createdAt.startsWith(dStr));
       const dBatches = showBatch ? batchProjects.filter(b => b.createdAt.startsWith(dStr)) : [];
       const dExp = expenses.filter(e => e.date === dStr);
@@ -282,14 +313,15 @@ const App: React.FC = () => {
       totalRevenue, totalAdCost, netProfit, 
       targetLeft: Math.max(0, monthlyTarget - totalRevenue),
       progressPercent: monthlyTarget > 0 ? (totalRevenue / monthlyTarget) * 100 : 0,
-      dailyRequired: Math.max(0, (monthlyTarget - totalRevenue) / remainingDays),
+      dailyRequired: remainingDays > 0 ? Math.max(0, (monthlyTarget - totalRevenue) / remainingDays) : 0,
       remainingDays,
       dailyBreakdown: dailyBreakdown.reverse(),
       agentLeaderboard,
       dhakaDate: dhakaNow.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
-      dhakaTime: dhakaNow.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+      dhakaTime: dhakaNow.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+      viewLabel: dashboardDate.toLocaleString('default', { month: 'long', year: 'numeric' })
     };
-  }, [sales, expenses, batchProjects, monthlyTarget, selectedSources, agents]);
+  }, [sales, expenses, batchProjects, monthlyTarget, selectedSources, agents, dashboardDate]);
 
   const [showResetModal, setShowResetModal] = useState(false);
   const [showBackupModal, setShowBackupModal] = useState(false);
@@ -311,21 +343,40 @@ const App: React.FC = () => {
 
   return (
     <div className={`flex h-full overflow-hidden ${theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-gray-50 text-gray-900'}`}>
-      <aside className={`w-64 flex-shrink-0 ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-200'} border-r flex flex-col hidden lg:flex z-40`}>
-        <div className="p-6">
+      
+      {/* Mobile Backdrop */}
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden backdrop-blur-sm transition-opacity"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* Sidebar - Responsive */}
+      <aside className={`
+        fixed inset-y-0 left-0 z-50 w-64 flex flex-col border-r transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-auto
+        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
+        ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-200'}
+      `}>
+        <div className="p-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-red-600 flex items-center justify-center shadow-lg font-black text-xl italic text-white">LM</div>
             <h1 className="font-bold text-lg leading-none italic uppercase">Mate Pro</h1>
           </div>
+          <button onClick={() => setIsMobileMenuOpen(false)} className="lg:hidden text-slate-500 hover:text-red-500 transition-colors">
+            <X className="w-6 h-6" />
+          </button>
         </div>
-        <nav className="flex-1 px-4 space-y-1">
+        
+        <nav className="flex-1 px-4 space-y-1 overflow-y-auto custom-scrollbar">
           {navItems.map((item) => (
-            <button key={item.id} onClick={() => setActiveTab(item.id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === item.id ? 'bg-red-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'}`}>
+            <button key={item.id} onClick={() => { setActiveTab(item.id); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === item.id ? 'bg-red-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'}`}>
               <item.icon className="w-5 h-5" />
               <span className="font-semibold text-sm">{item.label}</span>
             </button>
           ))}
         </nav>
+        
         <div className="p-4 mt-auto border-t border-slate-800/20 space-y-2 bg-slate-900/30">
           <button onClick={() => exportToExcel(stats.dailyBreakdown)} className="w-full flex items-center gap-3 px-4 py-2 text-xs font-bold text-blue-500 hover:bg-blue-500/10 rounded-lg transition-all"><Download className="w-4 h-4" /> Export Ledger</button>
           <button onClick={() => setShowBackupModal(true)} className="w-full flex items-center gap-3 px-4 py-2 text-xs font-bold text-green-500 hover:bg-green-500/10 rounded-lg transition-all"><Save className="w-4 h-4" /> Snapshot</button>
@@ -334,9 +385,13 @@ const App: React.FC = () => {
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-        <header className={`h-16 flex-shrink-0 ${theme === 'dark' ? 'bg-slate-900/50 border-slate-800' : 'bg-white/80 border-gray-200'} backdrop-blur-md border-b px-8 flex items-center justify-between z-30`}>
+        <header className={`h-16 flex-shrink-0 ${theme === 'dark' ? 'bg-slate-900/50 border-slate-800' : 'bg-white/80 border-gray-200'} backdrop-blur-md border-b px-4 lg:px-8 flex items-center justify-between z-30`}>
           <div className="flex items-center gap-4">
-             <span className="text-xs font-bold uppercase text-slate-500 italic tracking-widest">{stats.dhakaDate} | {stats.dhakaTime}</span>
+             <button onClick={() => setIsMobileMenuOpen(true)} className="lg:hidden p-1 text-slate-500 hover:text-white transition-colors">
+                <Menu className="w-6 h-6" />
+             </button>
+             <span className="text-xs font-bold uppercase text-slate-500 italic tracking-widest hidden sm:block">{stats.dhakaDate} | {stats.dhakaTime}</span>
+             <span className="text-xs font-bold uppercase text-slate-500 italic tracking-widest sm:hidden">{stats.dhakaTime}</span>
              {isSyncing && <RefreshCw className="w-4 h-4 text-blue-500 animate-spin" />}
           </div>
           <button onClick={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')} className="p-2 rounded-full bg-slate-800 text-yellow-500 shadow-lg">
@@ -344,8 +399,8 @@ const App: React.FC = () => {
           </button>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-          {activeTab === 'dashboard' && <DashboardView stats={stats} monthlyTarget={monthlyTarget} onTargetChange={setMonthlyTarget} theme={theme} setSales={setSales} sales={sales} batchProjects={batchProjects} onReset={() => setShowResetModal(true)} onExport={() => exportToExcel(stats.dailyBreakdown)} onBackup={() => setShowBackupModal(true)} selectedSources={selectedSources} setSelectedSources={setSelectedSources} />}
+        <div className="flex-1 overflow-y-auto p-4 lg:p-8 custom-scrollbar">
+          {activeTab === 'dashboard' && <DashboardView stats={stats} monthlyTarget={monthlyTarget} onTargetChange={setMonthlyTarget} theme={theme} setSales={setSales} sales={sales} batchProjects={batchProjects} onReset={() => setShowResetModal(true)} onExport={() => exportToExcel(stats.dailyBreakdown)} onBackup={() => setShowBackupModal(true)} selectedSources={selectedSources} setSelectedSources={setSelectedSources} dashboardDate={dashboardDate} setDashboardDate={setDashboardDate} />}
           {activeTab === 'sales' && <SalesView leads={leads} setLeads={setLeads} sales={sales.filter(s => selectedSources.includes(s.type))} setSales={setSales} agents={agents} setAgents={setAgents} theme={theme} />}
           {activeTab === 'batch' && <BatchView batchProjects={batchProjects} setBatchProjects={setBatchProjects} agents={agents} theme={theme} />}
           {activeTab === 'expenses' && <ExpensesView expenses={expenses} setExpenses={setExpenses} agents={agents} theme={theme} />}

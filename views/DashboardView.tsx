@@ -25,7 +25,9 @@ import {
   Monitor,
   Check,
   Wallet,
-  MessageSquare
+  MessageSquare,
+  ArrowLeftCircle,
+  Clock
 } from 'lucide-react';
 import { Sale, BatchProject } from '../types';
 
@@ -61,9 +63,11 @@ interface DashboardViewProps {
   onBackup: () => void;
   selectedSources: string[];
   setSelectedSources: (sources: string[]) => void;
+  dashboardDate: Date;
+  setDashboardDate: React.Dispatch<React.SetStateAction<Date>>;
 }
 
-const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onTargetChange, theme, setSales, sales, batchProjects, onReset, onExport, onBackup, selectedSources, setSelectedSources }) => {
+const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onTargetChange, theme, setSales, sales, batchProjects, onReset, onExport, onBackup, selectedSources, setSelectedSources, dashboardDate, setDashboardDate }) => {
   const [showTargetModal, setShowTargetModal] = useState(false);
   const [showQuickWebModal, setShowQuickWebModal] = useState(false);
   const [tempTarget, setTempTarget] = useState(monthlyTarget.toString());
@@ -94,6 +98,12 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
       setWebAmount('');
       setShowQuickWebModal(false);
     }
+  };
+
+  const changeMonth = (offset: number) => {
+    const newDate = new Date(dashboardDate);
+    newDate.setMonth(newDate.getMonth() + offset);
+    setDashboardDate(newDate);
   };
 
   const formatNum = (num: number) => (num || 0).toLocaleString();
@@ -154,35 +164,51 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
       </section>
 
       {/* 🧭 SOURCE FILTER BAR - DRIVES GLOBAL DATA */}
-      <section className={`${cardBg} border-2 border-slate-800/20 rounded-[2rem] p-6 shadow-xl flex flex-wrap items-center gap-6`}>
-         <div className="flex items-center gap-3 pr-6 border-r border-slate-800/20">
-            <Filter className="w-5 h-5 text-blue-500" />
-            <h3 className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Global Intelligence Filter</h3>
+      <section className={`${cardBg} border-2 border-slate-800/20 rounded-[2rem] p-6 shadow-xl flex flex-wrap items-center justify-between gap-6`}>
+         <div className="flex flex-wrap items-center gap-6">
+            <div className="flex items-center gap-3 pr-6 border-r border-slate-800/20">
+              <Filter className="w-5 h-5 text-blue-500" />
+              <h3 className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Global Intelligence Filter</h3>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              {[
+                { id: 'website', label: 'Web Recorded Sales', icon: Monitor, color: 'text-orange-500' },
+                { id: 'call', label: 'Call Center Ops', icon: PhoneCall, color: 'text-blue-500' },
+                { id: 'hand_cash', label: 'Hand Cash Entry', icon: Wallet, color: 'text-green-500' },
+                { id: 'batch', label: 'Batch/Live Roster', icon: LayoutGrid, color: 'text-purple-500' }
+              ].map((source) => {
+                const isActive = selectedSources.includes(source.id);
+                return (
+                  <button
+                    key={source.id}
+                    onClick={() => toggleSource(source.id)}
+                    className={`flex items-center gap-3 px-6 py-3 rounded-2xl border-2 transition-all ${
+                      isActive 
+                        ? `border-blue-600 bg-blue-600 text-white shadow-lg` 
+                        : `border-slate-800/30 ${theme === 'dark' ? 'bg-slate-950/40' : 'bg-gray-50'} text-slate-500 hover:border-slate-600`
+                    }`}
+                  >
+                    <source.icon className={`w-4 h-4 ${isActive ? 'text-white' : source.color}`} />
+                    <span className="text-[10px] font-black uppercase tracking-widest">{source.label}</span>
+                    {isActive && <Check className="w-3 h-3 ml-1" />}
+                  </button>
+                );
+              })}
+            </div>
          </div>
-         <div className="flex flex-wrap gap-3">
-            {[
-              { id: 'website', label: 'Web Recorded Sales', icon: Monitor, color: 'text-orange-500' },
-              { id: 'call', label: 'Call Center Ops', icon: PhoneCall, color: 'text-blue-500' },
-              { id: 'hand_cash', label: 'Hand Cash Entry', icon: Wallet, color: 'text-green-500' },
-              { id: 'batch', label: 'Batch/Live Roster', icon: LayoutGrid, color: 'text-purple-500' }
-            ].map((source) => {
-              const isActive = selectedSources.includes(source.id);
-              return (
-                <button
-                  key={source.id}
-                  onClick={() => toggleSource(source.id)}
-                  className={`flex items-center gap-3 px-6 py-3 rounded-2xl border-2 transition-all ${
-                    isActive 
-                      ? `border-blue-600 bg-blue-600 text-white shadow-lg` 
-                      : `border-slate-800/30 ${theme === 'dark' ? 'bg-slate-950/40' : 'bg-gray-50'} text-slate-500 hover:border-slate-600`
-                  }`}
-                >
-                  <source.icon className={`w-4 h-4 ${isActive ? 'text-white' : source.color}`} />
-                  <span className="text-[10px] font-black uppercase tracking-widest">{source.label}</span>
-                  {isActive && <Check className="w-3 h-3 ml-1" />}
-                </button>
-              );
-            })}
+
+         {/* TIME TRAVEL CONTROLS */}
+         <div className="flex items-center gap-3 bg-slate-800/30 p-2 rounded-2xl border border-slate-700/50">
+            <button onClick={() => changeMonth(-1)} className="p-3 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all text-slate-400 hover:text-white"><ArrowLeftCircle className="w-5 h-5" /></button>
+            <div className="text-center min-w-[140px]">
+               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-0.5">Viewing Period</p>
+               <p className="text-sm font-black text-white uppercase italic">{stats.viewLabel}</p>
+            </div>
+            <button onClick={() => changeMonth(1)} className="p-3 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all text-slate-400 hover:text-white"><ArrowRightCircle className="w-5 h-5" /></button>
+            <div className="w-[1px] h-8 bg-slate-700 mx-2" />
+            <button onClick={() => setDashboardDate(new Date())} className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 text-white font-black rounded-xl text-[10px] uppercase tracking-widest transition-all">
+               <Clock className="w-3 h-3" /> Live Now
+            </button>
          </div>
       </section>
 
