@@ -18,7 +18,9 @@ import {
   Save,
   AlertTriangle,
   Menu,
-  X
+  X,
+  Undo,
+  Redo
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { supabase } from './supabaseClient';
@@ -327,6 +329,94 @@ const App: React.FC = () => {
   const [showBackupModal, setShowBackupModal] = useState(false);
   const [backupName, setBackupName] = useState('');
 
+  // History & Undo/Redo Logic
+  const historyRef = useRef<any[]>([]);
+  const futureRef = useRef<any[]>([]);
+  const stateRef = useRef<any>(null);
+  const isTimeTraveling = useRef(false);
+  const autosaveTimeoutRef = useRef<number | null>(null);
+  
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+
+  const currentState = useMemo(() => ({
+    tasks, leads, sales, expenses, content, agents, teamMembers, batchProjects, monthlyTarget
+  }), [tasks, leads, sales, expenses, content, agents, teamMembers, batchProjects, monthlyTarget]);
+
+  useEffect(() => {
+    if (!initialLoadDone.current) return;
+
+    if (isTimeTraveling.current) {
+      isTimeTraveling.current = false;
+      stateRef.current = currentState;
+      return;
+    }
+
+    if (stateRef.current && JSON.stringify(stateRef.current) !== JSON.stringify(currentState)) {
+      historyRef.current.push(stateRef.current);
+      if (historyRef.current.length > 50) historyRef.current.shift();
+      futureRef.current = [];
+      
+      setCanUndo(true);
+      setCanRedo(false);
+
+      // Autosave
+      if (autosaveTimeoutRef.current) window.clearTimeout(autosaveTimeoutRef.current);
+      autosaveTimeoutRef.current = window.setTimeout(() => {
+        const dateName = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+        const newVersion: Version = {
+          id: Math.random().toString(36).substr(2, 9),
+          name: dateName,
+          timestamp: new Date().toISOString(),
+          data: currentState
+        };
+        setVersions(prev => [newVersion, ...prev]);
+      }, 2000);
+    }
+    
+    stateRef.current = currentState;
+  }, [currentState]);
+
+  const handleUndo = () => {
+    if (historyRef.current.length === 0) return;
+    const previous = historyRef.current.pop();
+    futureRef.current.push(currentState);
+    isTimeTraveling.current = true;
+    
+    setTasks(previous.tasks);
+    setLeads(previous.leads);
+    setSales(previous.sales);
+    setExpenses(previous.expenses);
+    setContent(previous.content);
+    setAgents(previous.agents);
+    setTeamMembers(previous.teamMembers);
+    setBatchProjects(previous.batchProjects);
+    setMonthlyTarget(previous.monthlyTarget);
+
+    setCanUndo(historyRef.current.length > 0);
+    setCanRedo(true);
+  };
+
+  const handleRedo = () => {
+    if (futureRef.current.length === 0) return;
+    const next = futureRef.current.pop();
+    historyRef.current.push(currentState);
+    isTimeTraveling.current = true;
+    
+    setTasks(next.tasks);
+    setLeads(next.leads);
+    setSales(next.sales);
+    setExpenses(next.expenses);
+    setContent(next.content);
+    setAgents(next.agents);
+    setTeamMembers(next.teamMembers);
+    setBatchProjects(next.batchProjects);
+    setMonthlyTarget(next.monthlyTarget);
+
+    setCanUndo(true);
+    setCanRedo(futureRef.current.length > 0);
+  };
+
   const confirmBackup = () => {
     const newVersion: Version = {
       id: Math.random().toString(36).substr(2, 9),
@@ -387,6 +477,14 @@ const App: React.FC = () => {
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
         <header className={`h-16 flex-shrink-0 ${theme === 'dark' ? 'bg-slate-900/50 border-slate-800' : 'bg-white/80 border-gray-200'} backdrop-blur-md border-b px-4 lg:px-8 flex items-center justify-between z-30`}>
           <div className="flex items-center gap-4">
+             <div className="flex items-center gap-1 mr-2">
+                <button onClick={handleUndo} disabled={!canUndo} className="p-2 rounded-full hover:bg-slate-800 text-slate-500 hover:text-white disabled:opacity-30 transition-colors" title="Undo">
+                  <Undo className="w-5 h-5" />
+                </button>
+                <button onClick={handleRedo} disabled={!canRedo} className="p-2 rounded-full hover:bg-slate-800 text-slate-500 hover:text-white disabled:opacity-30 transition-colors" title="Redo">
+                  <Redo className="w-5 h-5" />
+                </button>
+             </div>
              <button onClick={() => setIsMobileMenuOpen(true)} className="lg:hidden p-1 text-slate-500 hover:text-white transition-colors">
                 <Menu className="w-6 h-6" />
              </button>
