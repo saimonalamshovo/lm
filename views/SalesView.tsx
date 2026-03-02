@@ -39,10 +39,10 @@ const SalesView: React.FC<SalesViewProps> = ({ leads, setLeads, sales, setSales,
 
   const saveSale = (e: React.FormEvent) => {
     e.preventDefault();
-    const amount = parseInt(saleFormData.amount);
+    const amount = parseInt(saleFormData.amount) || 0;
     const adCost = parseInt(saleFormData.adCost) || 0;
     
-    if (amount > 0) {
+    if (amount > 0 || adCost > 0) {
       if (editId) {
         setSales(prev => prev.map(s => s.id === editId ? { 
           ...s, 
@@ -128,13 +128,16 @@ const SalesView: React.FC<SalesViewProps> = ({ leads, setLeads, sales, setSales,
     const newBatch: Sale[] = [];
     Object.keys(bulkInputs).forEach(agentId => {
       const data = bulkInputs[agentId];
-      if (parseInt(data.amount) > 0) {
+      const amount = parseInt(data.amount) || 0;
+      const adCost = parseInt(data.adCost) || 0;
+
+      if (amount > 0 || adCost > 0) {
         newBatch.push({
           id: Math.random().toString(36).substr(2, 9),
           agentId,
           type: 'call',
-          amount: parseInt(data.amount),
-          adCost: parseInt(data.adCost) || 0,
+          amount,
+          adCost,
           createdAt: bulkDate + "T12:00:00Z"
         });
       }
@@ -157,6 +160,40 @@ const SalesView: React.FC<SalesViewProps> = ({ leads, setLeads, sales, setSales,
       );
     });
   }, [sales, searchTerm, agents]);
+
+  const financialChronology = useMemo(() => {
+    const groups: Record<string, any> = {};
+
+    sales.forEach(sale => {
+      const date = sale.createdAt.split('T')[0];
+      if (!groups[date]) {
+        groups[date] = {
+          date,
+          website: { revenue: 0, adCost: 0, profit: 0 },
+          call: { revenue: 0, adCost: 0, profit: 0 },
+          hand_cash: { revenue: 0, adCost: 0, profit: 0 },
+          total: { revenue: 0, adCost: 0, profit: 0 }
+        };
+      }
+
+      const type = sale.type as 'website' | 'call' | 'hand_cash';
+      const revenue = sale.amount || 0;
+      const cost = sale.adCost || 0;
+      const profit = revenue - cost;
+
+      if (groups[date][type]) {
+          groups[date][type].revenue += revenue;
+          groups[date][type].adCost += cost;
+          groups[date][type].profit += profit;
+      }
+
+      groups[date].total.revenue += revenue;
+      groups[date].total.adCost += cost;
+      groups[date].total.profit += profit;
+    });
+
+    return Object.values(groups).sort((a: any, b: any) => b.date.localeCompare(a.date));
+  }, [sales]);
 
   const cardBg = theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-200 shadow-sm';
   const textColor = theme === 'dark' ? 'text-white' : 'text-gray-900';
@@ -209,6 +246,72 @@ const SalesView: React.FC<SalesViewProps> = ({ leads, setLeads, sales, setSales,
                </div>
             ))}
          </div>
+      </section>
+
+      <section className={`${cardBg} border-2 border-slate-800/10 rounded-[2rem] shadow-2xl overflow-hidden`}>
+        <div className="p-8 border-b border-slate-800/10">
+            <h3 className={`text-xl font-bold ${textColor} flex items-center gap-3 uppercase tracking-tight`}>
+                <Calendar className="w-6 h-6 text-purple-600" />
+                Commercial Matrix Ledger
+            </h3>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Financial Chronology</p>
+        </div>
+        <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+                <thead>
+                    <tr className={theme === 'dark' ? 'bg-slate-950/50' : 'bg-gray-100'}>
+                        <th className="px-4 py-4 text-[9px] font-black text-slate-500 uppercase tracking-widest border-r border-slate-800/10">Date</th>
+                        {['Website', 'Call Center', 'Hand Cash'].map(channel => (
+                            <th key={channel} colSpan={3} className="px-4 py-4 text-[9px] font-black text-slate-500 uppercase tracking-widest text-center border-r border-slate-800/10">
+                                {channel}
+                            </th>
+                        ))}
+                        <th colSpan={3} className="px-4 py-4 text-[9px] font-black text-slate-500 uppercase tracking-widest text-center">
+                            Daily Total
+                        </th>
+                    </tr>
+                    <tr className={theme === 'dark' ? 'bg-slate-900/50' : 'bg-gray-50'}>
+                        <th className="border-r border-slate-800/10"></th>
+                        {[1, 2, 3, 4].map(i => (
+                            <React.Fragment key={i}>
+                                <th className="px-2 py-2 text-[8px] font-bold text-yellow-600 uppercase text-center">Rev</th>
+                                <th className="px-2 py-2 text-[8px] font-bold text-red-600 uppercase text-center">Ad</th>
+                                <th className={`px-2 py-2 text-[8px] font-bold text-green-600 uppercase text-center ${i < 4 ? 'border-r border-slate-800/10' : ''}`}>Pft</th>
+                            </React.Fragment>
+                        ))}
+                    </tr>
+                </thead>
+                <tbody className={`divide-y ${theme === 'dark' ? 'divide-slate-800' : 'divide-gray-100'}`}>
+                    {financialChronology.map((row: any) => (
+                        <tr key={row.date} className="hover:bg-slate-800/5 transition-colors">
+                            <td className="px-4 py-4 text-xs font-bold border-r border-slate-800/10 whitespace-nowrap">
+                                {new Date(row.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' })}
+                            </td>
+                            
+                            {/* Website */}
+                            <td className="px-2 py-4 text-[10px] font-bold text-yellow-500 text-center tabular-nums">{row.website.revenue.toLocaleString()}</td>
+                            <td className="px-2 py-4 text-[10px] font-bold text-red-500 text-center tabular-nums">{row.website.adCost.toLocaleString()}</td>
+                            <td className="px-2 py-4 text-[10px] font-bold text-green-500 text-center tabular-nums border-r border-slate-800/10">{row.website.profit.toLocaleString()}</td>
+
+                            {/* Call */}
+                            <td className="px-2 py-4 text-[10px] font-bold text-yellow-500 text-center tabular-nums">{row.call.revenue.toLocaleString()}</td>
+                            <td className="px-2 py-4 text-[10px] font-bold text-red-500 text-center tabular-nums">{row.call.adCost.toLocaleString()}</td>
+                            <td className="px-2 py-4 text-[10px] font-bold text-green-500 text-center tabular-nums border-r border-slate-800/10">{row.call.profit.toLocaleString()}</td>
+
+                            {/* Hand Cash */}
+                            <td className="px-2 py-4 text-[10px] font-bold text-yellow-500 text-center tabular-nums">{row.hand_cash.revenue.toLocaleString()}</td>
+                            <td className="px-2 py-4 text-[10px] font-bold text-red-500 text-center tabular-nums">{row.hand_cash.adCost.toLocaleString()}</td>
+                            <td className="px-2 py-4 text-[10px] font-bold text-green-500 text-center tabular-nums border-r border-slate-800/10">{row.hand_cash.profit.toLocaleString()}</td>
+
+                            {/* Total */}
+                            <td className="px-2 py-4 text-[10px] font-bold text-yellow-500 text-center tabular-nums">{row.total.revenue.toLocaleString()}</td>
+                            <td className="px-2 py-4 text-[10px] font-bold text-red-500 text-center tabular-nums">{row.total.adCost.toLocaleString()}</td>
+                            <td className="px-2 py-4 text-[10px] font-bold text-green-500 text-center tabular-nums">{row.total.profit.toLocaleString()}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
       </section>
 
       <section className={`${cardBg} border-2 border-slate-800/10 rounded-[2rem] shadow-2xl overflow-hidden`}>
