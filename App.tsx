@@ -498,7 +498,7 @@ const App: React.FC = () => {
         </header>
 
         <div className="flex-1 overflow-y-auto p-4 lg:p-8 custom-scrollbar">
-          {activeTab === 'dashboard' && <DashboardView stats={stats} monthlyTarget={monthlyTarget} onTargetChange={setMonthlyTarget} theme={theme} setSales={setSales} sales={sales} batchProjects={batchProjects} onReset={() => setShowResetModal(true)} onExport={() => exportToExcel(stats.dailyBreakdown)} onBackup={() => setShowBackupModal(true)} selectedSources={selectedSources} setSelectedSources={setSelectedSources} dashboardDate={dashboardDate} setDashboardDate={setDashboardDate} />}
+          {activeTab === 'dashboard' && <DashboardView stats={stats} monthlyTarget={monthlyTarget} onTargetChange={setMonthlyTarget} theme={theme} setSales={setSales} sales={sales} batchProjects={batchProjects} onReset={() => setShowResetModal(true)} onExport={() => exportToExcel(stats.dailyBreakdown)} onBackup={() => setShowBackupModal(true)} selectedSources={selectedSources} setSelectedSources={setSelectedSources} dashboardDate={dashboardDate} setDashboardDate={setDashboardDate} agents={agents} />}
           {activeTab === 'sales' && <SalesView leads={leads} setLeads={setLeads} sales={sales.filter(s => selectedSources.includes(s.type))} setSales={setSales} agents={agents} setAgents={setAgents} theme={theme} />}
           {activeTab === 'batch' && <BatchView batchProjects={batchProjects} setBatchProjects={setBatchProjects} agents={agents} theme={theme} />}
           {activeTab === 'expenses' && <ExpensesView expenses={expenses} setExpenses={setExpenses} agents={agents} theme={theme} />}

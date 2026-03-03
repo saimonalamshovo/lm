@@ -27,9 +27,10 @@ import {
   Wallet,
   MessageSquare,
   ArrowLeftCircle,
-  Clock
+  Clock,
+  Clipboard
 } from 'lucide-react';
-import { Sale, BatchProject } from '../types';
+import { Sale, BatchProject, Agent } from '../types';
 
 const InsightCard: React.FC<{ label: string; value: string | number; icon: any; color: string; theme: 'dark' | 'light'; desc: string }> = ({ label, value, icon: Icon, color, theme, desc }) => {
   const colors: any = {
@@ -65,17 +66,77 @@ interface DashboardViewProps {
   setSelectedSources: (sources: string[]) => void;
   dashboardDate: Date;
   setDashboardDate: React.Dispatch<React.SetStateAction<Date>>;
+  agents: Agent[];
 }
 
-const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onTargetChange, theme, setSales, sales, batchProjects, onReset, onExport, onBackup, selectedSources, setSelectedSources, dashboardDate, setDashboardDate }) => {
+const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onTargetChange, theme, setSales, sales, batchProjects, onReset, onExport, onBackup, selectedSources, setSelectedSources, dashboardDate, setDashboardDate, agents }) => {
   const [showTargetModal, setShowTargetModal] = useState(false);
   const [showQuickWebModal, setShowQuickWebModal] = useState(false);
   const [tempTarget, setTempTarget] = useState(monthlyTarget.toString());
   const [webAmount, setWebAmount] = useState('');
   const [webDate, setWebDate] = useState(new Date().toISOString().split('T')[0]);
   const [expandedAgentId, setExpandedAgentId] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => { setTempTarget(monthlyTarget.toString()); }, [monthlyTarget]);
+
+  const yesterdayStats = React.useMemo(() => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yStr = yesterday.toISOString().split('T')[0];
+    const yDateDisplay = yesterday.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+
+    const ySales = sales.filter(s => s.createdAt.startsWith(yStr));
+    
+    // Website
+    const webSales = ySales.filter(s => s.type === 'website');
+    const webRev = webSales.reduce((a, s) => a + s.amount, 0);
+    const webAd = webSales.reduce((a, s) => a + (s.adCost || 0), 0);
+    
+    const list = [];
+
+    if (webRev > 0 || webAd > 0) {
+      list.push({
+        name: 'Website (Direct)',
+        revenue: webRev,
+        adCost: webAd,
+        profit: webRev - webAd,
+        roi: webAd > 0 ? webRev / webAd : 0,
+        isAgent: false
+      });
+    }
+
+    // Agents
+    agents.forEach(agent => {
+      const aSales = ySales.filter(s => s.agentId === agent.id && (s.type === 'call' || s.type === 'hand_cash'));
+      const rev = aSales.reduce((a, s) => a + s.amount, 0);
+      const ad = aSales.reduce((a, s) => a + (s.adCost || 0), 0);
+      
+      if (rev > 0 || ad > 0) {
+        list.push({
+          name: agent.name,
+          revenue: rev,
+          adCost: ad,
+          profit: rev - ad,
+          roi: ad > 0 ? rev / ad : 0,
+          isAgent: true,
+          avatar: agent.avatar
+        });
+      }
+    });
+
+    return { list: list.sort((a, b) => b.revenue - a.revenue), date: yDateDisplay };
+  }, [sales, agents]);
+
+  const copyToClipboard = () => {
+    const header = `Yesterday's Leaderboard (${yesterdayStats.date})\nName | Revenue | Ad Cost | Profit | ROI\n---------------------------------------`;
+    const rows = yesterdayStats.list.map(item => 
+      `${item.name} | ${item.revenue} | ${item.adCost} | ${item.profit} | ${item.roi.toFixed(2)}x`
+    ).join('\n');
+    navigator.clipboard.writeText(`${header}\n${rows}`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const toggleSource = (source: string) => {
     setSelectedSources(
@@ -218,6 +279,59 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
          <InsightCard label="Gross Revenue" value={`৳${formatNum(stats.totalRevenue)}`} icon={Coins} color="blue" theme={theme} desc="Filtered monthly inflow" />
          <InsightCard label="Market Spend" value={`৳${formatNum(stats.totalAdCost)}`} icon={Flame} color="red" theme={theme} desc="Filtered ad burn" />
          <InsightCard label="Monthly Profit" value={`৳${formatNum(stats.netProfit)}`} icon={BarChart3} color="orange" theme={theme} desc="Net profit from sources" />
+      </section>
+
+      {/* YESTERDAY'S LEADERBOARD */}
+      <section className={`${cardBg} border-2 border-slate-800/10 rounded-[2.5rem] p-8 shadow-2xl`}>
+         <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+               <History className="w-6 h-6 text-purple-500" />
+               <div>
+                  <h3 className={`text-lg font-bold ${textColor} uppercase tracking-tight`}>Yesterday's Leaderboard</h3>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{yesterdayStats.date} • Call Center & Website</p>
+               </div>
+            </div>
+            <button onClick={copyToClipboard} className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all">
+               {copied ? <Check className="w-4 h-4 text-green-500" /> : <Clipboard className="w-4 h-4" />}
+               {copied ? 'Copied' : 'Copy Data'}
+            </button>
+         </div>
+
+         <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+               <thead>
+                  <tr className="border-b border-slate-800/10">
+                     <th className="py-3 text-[9px] font-black text-slate-500 uppercase tracking-widest">Name</th>
+                     <th className="py-3 text-[9px] font-black text-slate-500 uppercase tracking-widest text-right">Revenue</th>
+                     <th className="py-3 text-[9px] font-black text-slate-500 uppercase tracking-widest text-right">Ad Cost</th>
+                     <th className="py-3 text-[9px] font-black text-slate-500 uppercase tracking-widest text-right">Profit</th>
+                     <th className="py-3 text-[9px] font-black text-slate-500 uppercase tracking-widest text-right">ROI</th>
+                  </tr>
+               </thead>
+               <tbody className="divide-y divide-slate-800/10">
+                  {yesterdayStats.list.length === 0 ? (
+                     <tr><td colSpan={5} className="py-8 text-center text-xs text-slate-500 font-bold uppercase opacity-50">No activity recorded yesterday</td></tr>
+                  ) : (
+                     yesterdayStats.list.map((item, idx) => (
+                        <tr key={idx} className="group hover:bg-slate-800/5 transition-colors">
+                           <td className="py-3 flex items-center gap-3">
+                              {item.isAgent ? (
+                                 <span className="text-lg">{item.avatar}</span>
+                              ) : (
+                                 <Globe className="w-4 h-4 text-orange-500" />
+                              )}
+                              <span className={`text-xs font-bold ${textColor} uppercase`}>{item.name}</span>
+                           </td>
+                           <td className="py-3 text-right text-xs font-bold text-blue-500 tabular-nums">৳{formatNum(item.revenue)}</td>
+                           <td className="py-3 text-right text-xs font-bold text-red-500 tabular-nums">৳{formatNum(item.adCost)}</td>
+                           <td className={`py-3 text-right text-xs font-black tabular-nums ${item.profit >= 0 ? 'text-green-500' : 'text-red-500'}`}>৳{formatNum(item.profit)}</td>
+                           <td className="py-3 text-right text-xs font-bold text-purple-500 tabular-nums">{item.roi.toFixed(2)}x</td>
+                        </tr>
+                     ))
+                  )}
+               </tbody>
+            </table>
+         </div>
       </section>
 
       {/* 🏆 SALES FORCE LEADERBOARD */}
