@@ -67,9 +67,11 @@ interface DashboardViewProps {
   dashboardDate: Date;
   setDashboardDate: React.Dispatch<React.SetStateAction<Date>>;
   agents: Agent[];
+  viewMode: 'daily' | 'monthly';
+  setViewMode: React.Dispatch<React.SetStateAction<'daily' | 'monthly'>>;
 }
 
-const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onTargetChange, theme, setSales, sales, batchProjects, onReset, onExport, onBackup, selectedSources, setSelectedSources, dashboardDate, setDashboardDate, agents }) => {
+const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onTargetChange, theme, setSales, sales, batchProjects, onReset, onExport, onBackup, selectedSources, setSelectedSources, dashboardDate, setDashboardDate, agents, viewMode, setViewMode }) => {
   const [showTargetModal, setShowTargetModal] = useState(false);
   const [showQuickWebModal, setShowQuickWebModal] = useState(false);
   const [tempTarget, setTempTarget] = useState(monthlyTarget.toString());
@@ -81,7 +83,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
   useEffect(() => { setTempTarget(monthlyTarget.toString()); }, [monthlyTarget]);
 
   const yesterdayStats = React.useMemo(() => {
-    const yesterday = new Date();
+    const yesterday = viewMode === 'daily' ? new Date(dashboardDate) : new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const yStr = yesterday.toISOString().split('T')[0];
     const yDateDisplay = yesterday.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
@@ -126,7 +128,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
     });
 
     return { list: list.sort((a, b) => b.revenue - a.revenue), date: yDateDisplay };
-  }, [sales, agents]);
+  }, [sales, agents, dashboardDate, viewMode]);
 
   const copyToClipboard = () => {
     const header = `Yesterday's Leaderboard (${yesterdayStats.date})\nName | Revenue | Ad Cost | Profit | ROI\n---------------------------------------`;
@@ -161,9 +163,13 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
     }
   };
 
-  const changeMonth = (offset: number) => {
+  const changePeriod = (offset: number) => {
     const newDate = new Date(dashboardDate);
-    newDate.setMonth(newDate.getMonth() + offset);
+    if (viewMode === 'daily') {
+      newDate.setDate(newDate.getDate() + offset);
+    } else {
+      newDate.setMonth(newDate.getMonth() + offset);
+    }
     setDashboardDate(newDate);
   };
 
@@ -260,12 +266,17 @@ const DashboardView: React.FC<DashboardViewProps> = ({ stats, monthlyTarget, onT
 
          {/* TIME TRAVEL CONTROLS */}
          <div className="flex items-center gap-3 bg-slate-800/30 p-2 rounded-2xl border border-slate-700/50">
-            <button onClick={() => changeMonth(-1)} className="p-3 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all text-slate-400 hover:text-white"><ArrowLeftCircle className="w-5 h-5" /></button>
+            <div className="flex bg-slate-900 rounded-xl p-1 border border-slate-700">
+               <button onClick={() => setViewMode('daily')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${viewMode === 'daily' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-white'}`}>Daily</button>
+               <button onClick={() => setViewMode('monthly')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${viewMode === 'monthly' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-white'}`}>Monthly</button>
+            </div>
+            <div className="w-[1px] h-8 bg-slate-700 mx-1" />
+            <button onClick={() => changePeriod(-1)} className="p-3 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all text-slate-400 hover:text-white"><ArrowLeftCircle className="w-5 h-5" /></button>
             <div className="text-center min-w-[140px]">
                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-0.5">Viewing Period</p>
                <p className="text-sm font-black text-white uppercase italic">{stats.viewLabel}</p>
             </div>
-            <button onClick={() => changeMonth(1)} className="p-3 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all text-slate-400 hover:text-white"><ArrowRightCircle className="w-5 h-5" /></button>
+            <button onClick={() => changePeriod(1)} className="p-3 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all text-slate-400 hover:text-white"><ArrowRightCircle className="w-5 h-5" /></button>
             <div className="w-[1px] h-8 bg-slate-700 mx-2" />
             <button onClick={() => setDashboardDate(new Date())} className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 text-white font-black rounded-xl text-[10px] uppercase tracking-widest transition-all">
                <Clock className="w-3 h-3" /> Live Now

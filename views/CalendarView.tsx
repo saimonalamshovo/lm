@@ -36,13 +36,45 @@ const CalendarView: React.FC<CalendarViewProps> = ({ tasks, sales, expenses, the
     setCurrentDate(newDate);
   };
 
-  const dayDetail = selectedDateDetail ? {
-    date: selectedDateDetail,
-    tasks: tasks.filter(t => t.dueDate === selectedDateDetail),
-    sales: sales.filter(s => s.createdAt.startsWith(selectedDateDetail)),
-    expenses: expenses.filter(e => e.date === selectedDateDetail),
-    batches: filteredBatches.filter(b => b.createdAt.startsWith(selectedDateDetail))
-  } : null;
+  const dayDetail = selectedDateDetail ? (() => {
+    const dTasks = tasks.filter(t => t.dueDate === selectedDateDetail);
+    const dSales = sales.filter(s => s.createdAt.startsWith(selectedDateDetail));
+    const dExpenses = expenses.filter(e => e.date === selectedDateDetail);
+    const dBatches = filteredBatches.filter(b => b.createdAt.startsWith(selectedDateDetail));
+
+    const agentStats = agents.map(agent => {
+      const aSales = dSales.filter(s => s.agentId === agent.id);
+      const rev = aSales.reduce((a, s) => a + s.amount, 0);
+      const adCost = aSales.reduce((a, s) => a + (s.adCost || 0), 0);
+      return {
+        ...agent,
+        revenue: rev,
+        adCost: adCost,
+        profit: rev - adCost,
+      };
+    }).filter(a => a.revenue > 0 || a.adCost > 0);
+
+    const webSales = dSales.filter(s => s.type === 'website');
+    const webRev = webSales.reduce((a, s) => a + s.amount, 0);
+    const webAdCost = webSales.reduce((a, s) => a + (s.adCost || 0), 0);
+    const webStats = webRev > 0 || webAdCost > 0 ? {
+      name: 'Website (Direct)',
+      avatar: '🌐',
+      revenue: webRev,
+      adCost: webAdCost,
+      profit: webRev - webAdCost,
+    } : null;
+
+    return {
+      date: selectedDateDetail,
+      tasks: dTasks,
+      sales: dSales,
+      expenses: dExpenses,
+      batches: dBatches,
+      agentStats,
+      webStats
+    };
+  })() : null;
 
   return (
     <div className="space-y-8 h-full flex flex-col animate-in fade-in duration-500">
@@ -130,17 +162,52 @@ const CalendarView: React.FC<CalendarViewProps> = ({ tasks, sales, expenses, the
                   </section>
                 )}
 
-                {(dayDetail.sales.length > 0 || dayDetail.batches.length > 0) && (
+                {(dayDetail.agentStats.length > 0 || dayDetail.webStats || dayDetail.batches.length > 0) && (
                   <section>
                     <h4 className="text-[10px] font-black text-green-500 uppercase tracking-widest mb-4 flex items-center gap-2"><Zap className="w-3 h-3" /> Revenue Flows</h4>
                     <div className="space-y-2">
-                       {dayDetail.sales.map(s => (
-                         <div key={s.id} className="bg-green-500/5 p-4 rounded-2xl border border-green-500/20 flex justify-between items-center">
+                       {dayDetail.webStats && (
+                         <div className="bg-orange-500/5 p-4 rounded-2xl border border-orange-500/20 flex flex-col gap-2">
                             <div className="flex items-center gap-3">
-                               <span className="text-xl">{agents.find(a => a.id === s.agentId)?.avatar || '🌐'}</span>
-                               <p className={`text-sm font-black italic ${textColor}`}>{agents.find(a => a.id === s.agentId)?.name || 'Direct Order'}</p>
+                               <span className="text-xl">{dayDetail.webStats.avatar}</span>
+                               <p className={`text-sm font-black italic ${textColor}`}>{dayDetail.webStats.name}</p>
                             </div>
-                            <p className="text-sm font-black text-green-500">৳{s.amount.toLocaleString()}</p>
+                            <div className="grid grid-cols-3 gap-2 mt-2">
+                               <div>
+                                 <p className="text-[8px] font-black text-slate-500 uppercase">Revenue</p>
+                                 <p className="text-xs font-black text-blue-500">৳{dayDetail.webStats.revenue.toLocaleString()}</p>
+                               </div>
+                               <div>
+                                 <p className="text-[8px] font-black text-slate-500 uppercase">Ad Cost</p>
+                                 <p className="text-xs font-black text-red-500">৳{dayDetail.webStats.adCost.toLocaleString()}</p>
+                               </div>
+                               <div>
+                                 <p className="text-[8px] font-black text-slate-500 uppercase">Profit</p>
+                                 <p className={`text-xs font-black ${dayDetail.webStats.profit >= 0 ? 'text-green-500' : 'text-red-500'}`}>৳{dayDetail.webStats.profit.toLocaleString()}</p>
+                               </div>
+                            </div>
+                         </div>
+                       )}
+                       {dayDetail.agentStats.map(a => (
+                         <div key={a.id} className="bg-green-500/5 p-4 rounded-2xl border border-green-500/20 flex flex-col gap-2">
+                            <div className="flex items-center gap-3">
+                               <span className="text-xl">{a.avatar}</span>
+                               <p className={`text-sm font-black italic ${textColor}`}>{a.name}</p>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2 mt-2">
+                               <div>
+                                 <p className="text-[8px] font-black text-slate-500 uppercase">Revenue</p>
+                                 <p className="text-xs font-black text-blue-500">৳{a.revenue.toLocaleString()}</p>
+                               </div>
+                               <div>
+                                 <p className="text-[8px] font-black text-slate-500 uppercase">Ad Cost</p>
+                                 <p className="text-xs font-black text-red-500">৳{a.adCost.toLocaleString()}</p>
+                               </div>
+                               <div>
+                                 <p className="text-[8px] font-black text-slate-500 uppercase">Profit</p>
+                                 <p className={`text-xs font-black ${a.profit >= 0 ? 'text-green-500' : 'text-red-500'}`}>৳{a.profit.toLocaleString()}</p>
+                               </div>
+                            </div>
                          </div>
                        ))}
                        {dayDetail.batches.map(b => (

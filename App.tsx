@@ -59,6 +59,7 @@ const App: React.FC = () => {
 
   // New State for Historical Viewing
   const [dashboardDate, setDashboardDate] = useState(new Date());
+  const [viewMode, setViewMode] = useState<'daily' | 'monthly'>('monthly');
 
   const [selectedSources, setSelectedSources] = useState<string[]>(['website', 'call', 'batch', 'hand_cash']);
 
@@ -228,72 +229,95 @@ const App: React.FC = () => {
     // View Window Based on Dashboard Date
     const viewYear = dashboardDate.getFullYear();
     const viewMonth = dashboardDate.getMonth();
+    const viewDate = dashboardDate.getDate();
     const lastDay = new Date(viewYear, viewMonth + 1, 0).getDate();
 
     // Remaining Days Logic
     let remainingDays = 0;
-    if (viewYear === dhakaNow.getFullYear() && viewMonth === dhakaNow.getMonth()) {
-        remainingDays = Math.max(1, lastDay - dhakaNow.getDate() + 1);
-    } else if (new Date(viewYear, viewMonth, 1) > dhakaNow) {
-        remainingDays = lastDay; // Future month
+    if (viewMode === 'monthly') {
+      if (viewYear === dhakaNow.getFullYear() && viewMonth === dhakaNow.getMonth()) {
+          remainingDays = Math.max(1, lastDay - dhakaNow.getDate() + 1);
+      } else if (new Date(viewYear, viewMonth, 1) > dhakaNow) {
+          remainingDays = lastDay; // Future month
+      } else {
+          remainingDays = 0; // Past month
+      }
     } else {
-        remainingDays = 0; // Past month
+      const isToday = viewYear === dhakaNow.getFullYear() && viewMonth === dhakaNow.getMonth() && viewDate === dhakaNow.getDate();
+      const isFuture = new Date(viewYear, viewMonth, viewDate) > dhakaNow;
+      remainingDays = isToday || isFuture ? 1 : 0;
     }
 
     const showBatch = selectedSources.includes('batch');
 
     const filteredSales = sales.filter(s => selectedSources.includes(s.type));
     
-    // STRICT MONTH FILTERING
-    const monthSales = filteredSales.filter(s => {
+    // STRICT FILTERING
+    const periodSales = filteredSales.filter(s => {
       const d = new Date(s.createdAt);
+      if (viewMode === 'daily') {
+        return d.getDate() === viewDate && d.getMonth() === viewMonth && d.getFullYear() === viewYear;
+      }
       return d.getMonth() === viewMonth && d.getFullYear() === viewYear;
     });
     
-    const monthExpenses = expenses.filter(e => {
+    const periodExpenses = expenses.filter(e => {
       const d = new Date(e.date);
+      if (viewMode === 'daily') {
+        return d.getDate() === viewDate && d.getMonth() === viewMonth && d.getFullYear() === viewYear;
+      }
       return d.getMonth() === viewMonth && d.getFullYear() === viewYear;
     });
     
-    const monthBatches = batchProjects.filter(b => {
+    const periodBatches = batchProjects.filter(b => {
       const d = new Date(b.createdAt);
+      if (viewMode === 'daily') {
+        return d.getDate() === viewDate && d.getMonth() === viewMonth && d.getFullYear() === viewYear;
+      }
       return d.getMonth() === viewMonth && d.getFullYear() === viewYear;
     });
 
-    const revWeb = monthSales.filter(s => s.type === 'website').reduce((acc, s) => acc + s.amount, 0);
-    const revCall = monthSales.filter(s => s.type === 'call').reduce((acc, s) => acc + s.amount, 0);
-    const revHandCash = monthSales.filter(s => s.type === 'hand_cash').reduce((acc, s) => acc + s.amount, 0);
-    const revBatch = showBatch ? monthBatches.reduce((acc, b) => acc + b.students.reduce((sAcc, st) => sAcc + (Number(st.paid) || 0), 0), 0) : 0;
+    const revWeb = periodSales.filter(s => s.type === 'website').reduce((acc, s) => acc + s.amount, 0);
+    const revCall = periodSales.filter(s => s.type === 'call').reduce((acc, s) => acc + s.amount, 0);
+    const revHandCash = periodSales.filter(s => s.type === 'hand_cash').reduce((acc, s) => acc + s.amount, 0);
+    const revBatch = showBatch ? periodBatches.reduce((acc, b) => acc + b.students.reduce((sAcc, st) => sAcc + (Number(st.paid) || 0), 0), 0) : 0;
 
     const totalRevenue = revWeb + revCall + revHandCash + revBatch;
-    const totalAdCost = monthSales.reduce((a, s) => a + (s.adCost || 0), 0) + (showBatch ? monthBatches.reduce((a, b) => a + b.adCosts.reduce((ca, co) => ca + (co.amount || 0), 0), 0) : 0);
-    const operationalCosts = monthExpenses.reduce((acc, e) => acc + e.amount, 0);
+    const totalAdCost = periodSales.reduce((a, s) => a + (s.adCost || 0), 0) + (showBatch ? periodBatches.reduce((a, b) => a + b.adCosts.reduce((ca, co) => ca + (co.amount || 0), 0), 0) : 0);
+    const operationalCosts = periodExpenses.reduce((acc, e) => acc + e.amount, 0);
     const netProfit = totalRevenue - totalAdCost - operationalCosts;
 
     const dailyBreakdown = [];
-    for (let i = 1; i <= lastDay; i++) {
-      const dStr = `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
-      const dSales = filteredSales.filter(s => s.createdAt.startsWith(dStr));
-      const dBatches = showBatch ? batchProjects.filter(b => b.createdAt.startsWith(dStr)) : [];
-      const dExp = expenses.filter(e => e.date === dStr);
+    if (viewMode === 'monthly') {
+      for (let i = 1; i <= lastDay; i++) {
+        const dStr = `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
+        const dSales = filteredSales.filter(s => s.createdAt.startsWith(dStr));
+        const dBatches = showBatch ? batchProjects.filter(b => b.createdAt.startsWith(dStr)) : [];
+        const dExp = expenses.filter(e => e.date === dStr);
 
-      const drW = dSales.filter(s => s.type === 'website').reduce((a, s) => a + s.amount, 0);
-      const drC = dSales.filter(s => s.type === 'call').reduce((a, s) => a + s.amount, 0);
-      const drH = dSales.filter(s => s.type === 'hand_cash').reduce((a, s) => a + s.amount, 0);
-      const drB = dBatches.reduce((a, b) => a + b.students.reduce((sa, st) => sa + (Number(st.paid) || 0), 0), 0);
-      
-      const dRev = drW + drC + drH + drB;
-      const dAds = dSales.reduce((a, s) => a + (s.adCost || 0), 0) + dBatches.reduce((a, b) => a + b.adCosts.reduce((ca, co) => ca + (co.amount || 0), 0), 0);
-      const dOps = dExp.reduce((a, e) => a + e.amount, 0);
+        const drW = dSales.filter(s => s.type === 'website').reduce((a, s) => a + s.amount, 0);
+        const drC = dSales.filter(s => s.type === 'call').reduce((a, s) => a + s.amount, 0);
+        const drH = dSales.filter(s => s.type === 'hand_cash').reduce((a, s) => a + s.amount, 0);
+        const drB = dBatches.reduce((a, b) => a + b.students.reduce((sa, st) => sa + (Number(st.paid) || 0), 0), 0);
+        
+        const dRev = drW + drC + drH + drB;
+        const dAds = dSales.reduce((a, s) => a + (s.adCost || 0), 0) + dBatches.reduce((a, b) => a + b.adCosts.reduce((ca, co) => ca + (co.amount || 0), 0), 0);
+        const dOps = dExp.reduce((a, e) => a + e.amount, 0);
 
-      if (dRev > 0 || dAds > 0 || dOps > 0) {
-        dailyBreakdown.push({ date: dStr, totalAds: dAds, totalRev: dRev, netProfit: dRev - dAds - dOps, revWeb: drW, revCall: drC, revHandCash: drH, revBatch: drB });
+        if (dRev > 0 || dAds > 0 || dOps > 0) {
+          dailyBreakdown.push({ date: dStr, totalAds: dAds, totalRev: dRev, netProfit: dRev - dAds - dOps, revWeb: drW, revCall: drC, revHandCash: drH, revBatch: drB });
+        }
+      }
+    } else {
+      const dStr = `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(viewDate).padStart(2,'0')}`;
+      if (totalRevenue > 0 || totalAdCost > 0 || operationalCosts > 0) {
+        dailyBreakdown.push({ date: dStr, totalAds: totalAdCost, totalRev: totalRevenue, netProfit, revWeb: revWeb, revCall: revCall, revHandCash: revHandCash, revBatch: revBatch });
       }
     }
 
     const agentLeaderboard = agents.map(agent => {
-      const aSales = monthSales.filter(s => s.agentId === agent.id);
-      const aBatchRev = showBatch ? batchProjects.reduce((acc, b) => 
+      const aSales = periodSales.filter(s => s.agentId === agent.id);
+      const aBatchRev = showBatch ? periodBatches.reduce((acc, b) => 
         acc + b.students.filter(s => s.advisor === agent.name).reduce((sa, st) => sa + (Number(st.paid) || 0), 0), 0
       ) : 0;
       
@@ -301,29 +325,41 @@ const App: React.FC = () => {
       const cost = aSales.reduce((a, s) => a + s.adCost, 0);
       
       const agentDaily = [];
-      const dates = Array.from(new Set([...aSales.map(s => s.createdAt.split('T')[0]), ...batchProjects.map(b => b.createdAt.split('T')[0])]));
+      const dates = Array.from(new Set([...aSales.map(s => s.createdAt.split('T')[0]), ...periodBatches.map(b => b.createdAt.split('T')[0])]));
       for(const d of dates) {
         const dr = aSales.filter(s => s.createdAt.startsWith(d)).reduce((a, s) => a + s.amount, 0) + 
-                   batchProjects.filter(b => b.createdAt.startsWith(d)).reduce((acc, b) => acc + b.students.filter(s => s.advisor === agent.name).reduce((sa, st) => sa + (Number(st.paid) || 0), 0), 0);
+                   periodBatches.filter(b => b.createdAt.startsWith(d)).reduce((acc, b) => acc + b.students.filter(s => s.advisor === agent.name).reduce((sa, st) => sa + (Number(st.paid) || 0), 0), 0);
         if(dr > 0) agentDaily.push({ date: d, revenue: dr, profit: dr, adBurn: 0 });
       }
 
       return { ...agent, revenue: rev, adCost: cost, profit: rev - cost, roi: cost > 0 ? rev / cost : 0, count: aSales.length, dailyBreakdown: agentDaily };
     }).sort((a, b) => b.revenue - a.revenue);
 
+    const viewLabel = viewMode === 'daily' 
+      ? dashboardDate.toLocaleDateString('default', { day: 'numeric', month: 'long', year: 'numeric' })
+      : dashboardDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+    const targetLeft = viewMode === 'daily' 
+      ? Math.max(0, (monthlyTarget / lastDay) - totalRevenue)
+      : Math.max(0, monthlyTarget - totalRevenue);
+      
+    const progressPercent = viewMode === 'daily'
+      ? ((monthlyTarget / lastDay) > 0 ? (totalRevenue / (monthlyTarget / lastDay)) * 100 : 0)
+      : (monthlyTarget > 0 ? (totalRevenue / monthlyTarget) * 100 : 0);
+
     return {
       totalRevenue, totalAdCost, netProfit, 
-      targetLeft: Math.max(0, monthlyTarget - totalRevenue),
-      progressPercent: monthlyTarget > 0 ? (totalRevenue / monthlyTarget) * 100 : 0,
+      targetLeft,
+      progressPercent,
       dailyRequired: remainingDays > 0 ? Math.max(0, (monthlyTarget - totalRevenue) / remainingDays) : 0,
       remainingDays,
       dailyBreakdown: dailyBreakdown.reverse(),
       agentLeaderboard,
       dhakaDate: dhakaNow.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
       dhakaTime: dhakaNow.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-      viewLabel: dashboardDate.toLocaleString('default', { month: 'long', year: 'numeric' })
+      viewLabel
     };
-  }, [sales, expenses, batchProjects, monthlyTarget, selectedSources, agents, dashboardDate]);
+  }, [sales, expenses, batchProjects, monthlyTarget, selectedSources, agents, dashboardDate, viewMode]);
 
   const [showResetModal, setShowResetModal] = useState(false);
   const [showBackupModal, setShowBackupModal] = useState(false);
@@ -498,7 +534,7 @@ const App: React.FC = () => {
         </header>
 
         <div className="flex-1 overflow-y-auto p-4 lg:p-8 custom-scrollbar">
-          {activeTab === 'dashboard' && <DashboardView stats={stats} monthlyTarget={monthlyTarget} onTargetChange={setMonthlyTarget} theme={theme} setSales={setSales} sales={sales} batchProjects={batchProjects} onReset={() => setShowResetModal(true)} onExport={() => exportToExcel(stats.dailyBreakdown)} onBackup={() => setShowBackupModal(true)} selectedSources={selectedSources} setSelectedSources={setSelectedSources} dashboardDate={dashboardDate} setDashboardDate={setDashboardDate} agents={agents} />}
+          {activeTab === 'dashboard' && <DashboardView stats={stats} monthlyTarget={monthlyTarget} onTargetChange={setMonthlyTarget} theme={theme} setSales={setSales} sales={sales} batchProjects={batchProjects} onReset={() => setShowResetModal(true)} onExport={() => exportToExcel(stats.dailyBreakdown)} onBackup={() => setShowBackupModal(true)} selectedSources={selectedSources} setSelectedSources={setSelectedSources} dashboardDate={dashboardDate} setDashboardDate={setDashboardDate} agents={agents} viewMode={viewMode} setViewMode={setViewMode} />}
           {activeTab === 'sales' && <SalesView leads={leads} setLeads={setLeads} sales={sales.filter(s => selectedSources.includes(s.type))} setSales={setSales} agents={agents} setAgents={setAgents} theme={theme} />}
           {activeTab === 'batch' && <BatchView batchProjects={batchProjects} setBatchProjects={setBatchProjects} agents={agents} theme={theme} />}
           {activeTab === 'expenses' && <ExpensesView expenses={expenses} setExpenses={setExpenses} agents={agents} theme={theme} />}
